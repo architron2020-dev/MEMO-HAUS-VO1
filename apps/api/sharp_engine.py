@@ -13,34 +13,17 @@ import logging
 import threading
 from pathlib import Path
 
-import torch
-
-from sharp.cli.predict import DEFAULT_MODEL_URL, predict_image
-from sharp.models import PredictorParams, create_predictor
-from sharp.utils import io
-from sharp.utils.gaussians import save_ply
-
 LOGGER = logging.getLogger("memo-haus.sharp")
-
-
-def _resolve_device(requested: str) -> str:
-    if requested != "default":
-        return requested
-    if torch.cuda.is_available():
-        return "cuda"
-    if torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
 
 
 class SharpEngine:
     """Holds a warm SHARP predictor and turns images into Gaussian-splat PLYs."""
 
     def __init__(self, device: str = "default", checkpoint_path: Path | None = None):
-        self.device = _resolve_device(device)
+        self._requested_device = device
+        self.device = device  # resolved later inside load() once torch is imported
         self.checkpoint_path = checkpoint_path
         self._predictor = None
-        # The model + GPU can only run one inference at a time safely.
         self._lock = threading.Lock()
 
     def load(self) -> None:
@@ -48,10 +31,32 @@ class SharpEngine:
         if self._predictor is not None:
             return
 
+        # Heavy imports deferred here so uvicorn can bind before torch DLLs load
+        import torch
+        from sharp.cli.predict import DEFAULT_MODEL_URL, predict_image  # noqa: F401
+        from sharp.models import PredictorParams, create_predictor
+        from sharp.utils.gaussians import save_ply  # noqa: F401
+
+        # Resolve device now that torch is available
+        req = self._requested_device
+        if req == "default":
+            if torch.cuda.is_available():
+                self.device = "cuda"
+            elif torch.backends.mps.is_available():
+                self.device = "mps"
+            else:
+                self.device = "cpu"
+        else:
+            self.device = req
+
+        LOGGER.info("torch %s | CUDA available: %s | device: %s",
+                    torch.__version__, torch.cuda.is_available(), self.device)
+
         if self.checkpoint_path is not None:
             LOGGER.info("Loading checkpoint from %s", self.checkpoint_path)
             state_dict = torch.load(self.checkpoint_path, weights_only=True)
         else:
+            from sharp.cli.predict import DEFAULT_MODEL_URL
             LOGGER.info("Loading default SHARP checkpoint from %s", DEFAULT_MODEL_URL)
             state_dict = torch.hub.load_state_dict_from_url(DEFAULT_MODEL_URL, progress=True)
 
@@ -71,10 +76,14 @@ class SharpEngine:
         if self._predictor is None:
             raise RuntimeError("SharpEngine.load() must be called before inference.")
 
+        import torch
+        from sharp.cli.predict import predict_image
+        from sharp.utils import io
+        from sharp.utils.gaussians import save_ply
+
         image, _, f_px = io.load_rgb(image_path)
         height, width = image.shape[:2]
 
-        # Serialize GPU access: one inference at a time.
         with self._lock:
             gaussians = predict_image(
                 self._predictor, image, f_px, torch.device(self.device)

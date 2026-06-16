@@ -18,8 +18,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from sharp.utils import io as sharp_io
-
 from sharp_engine import SharpEngine
 from storage import Scene, Storage, now
 
@@ -35,7 +33,8 @@ DEVICE = os.environ.get("MEMO_DEVICE", "default")
 CHECKPOINT = os.environ.get("MEMO_CHECKPOINT")
 WARMUP_TIMEOUT = float(os.environ.get("MEMO_WARMUP_TIMEOUT", "900"))
 
-SUPPORTED_EXTENSIONS = set(sharp_io.get_supported_image_extensions())
+# Populated lazily on first upload (deferred to avoid importing torch at startup)
+SUPPORTED_EXTENSIONS: set[str] = set()
 
 storage = Storage(STORAGE_DIR)
 engine = SharpEngine(device=DEVICE, checkpoint_path=Path(CHECKPOINT) if CHECKPOINT else None)
@@ -90,7 +89,11 @@ def predict(
     author: str = Form(""),
 ) -> dict:
     suffix = Path(image.filename or "").suffix.lower()
-    if suffix not in {ext.lower() for ext in SUPPORTED_EXTENSIONS}:
+    # Populate supported extensions on first upload (torch must be loaded by then)
+    if not SUPPORTED_EXTENSIONS:
+        from sharp.utils import io as sharp_io
+        SUPPORTED_EXTENSIONS.update(ext.lower() for ext in sharp_io.get_supported_image_extensions())
+    if suffix not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported image type '{suffix or image.filename}'.",

@@ -34,7 +34,6 @@ const args = [
   "127.0.0.1",
   "--port",
   port,
-  "--reload",
   // NOTE: uvicorn --reload watches this cwd (apps/api). Generated uploads/splats
   // live in the repo-root `storage/` dir (see main.py), which is outside this
   // tree, so writing a new memory never triggers a model-reloading restart.
@@ -43,7 +42,11 @@ const args = [
 const child = spawn(pythonPath, args, {
   cwd: apiDir,
   stdio: "inherit",
-  env: process.env,
+  env: {
+    ...process.env,
+    // Defer CUDA module loading until first use — reduces DLLs scanned at import time
+    CUDA_MODULE_LOADING: "LAZY",
+  },
 });
 
 child.on("exit", (code) => process.exit(code ?? 0));
