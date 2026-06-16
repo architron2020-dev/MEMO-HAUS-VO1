@@ -1,5 +1,5 @@
 {
-  "name": "memo-house",
+  "name": "memo-haus",
   "private": true,
   "version": "0.1.0",
   "description": "Scan a QR code, upload an old photo of Wolfsburg, and watch it become an interactive Gaussian-splat scene.",
@@ -11,8 +11,8 @@
     "setup:ml-sharp": "node scripts/setup-ml-sharp.mjs",
     "dev": "concurrently -n api,web -c cyan,green -k \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "node scripts/run-api.mjs",
-    "dev:web": "npm --workspace @memo-house/web run dev",
-    "build": "npm --workspace @memo-house/web run build"
+    "dev:web": "npm --workspace @memo-haus/web run dev",
+    "build": "npm --workspace @memo-haus/web run build"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

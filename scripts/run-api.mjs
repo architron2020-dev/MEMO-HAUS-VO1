@@ -18,7 +18,7 @@ const pythonPath =
     : resolve(venv, "bin", "python");
 
 if (!existsSync(pythonPath)) {
-  console.error(`\n[memo-house] Python venv not found at:\n  ${pythonPath}\n`);
+  console.error(`\n[memo-haus] Python venv not found at:\n  ${pythonPath}\n`);
   console.error("Set up packages/ml-sharp/.venv first (see README.md).\n");
   process.exit(1);
 }

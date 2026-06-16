@@ -20,7 +20,7 @@ from sharp.models import PredictorParams, create_predictor
 from sharp.utils import io
 from sharp.utils.gaussians import save_ply
 
-LOGGER = logging.getLogger("memo-house.sharp")
+LOGGER = logging.getLogger("memo-haus.sharp")
 
 
 def _resolve_device(requested: str) -> str:

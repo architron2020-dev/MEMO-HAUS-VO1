@@ -24,7 +24,7 @@ from sharp_engine import SharpEngine
 from storage import Scene, Storage, now
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-LOGGER = logging.getLogger("memo-house.api")
+LOGGER = logging.getLogger("memo-haus.api")
 
 # --- configuration -----------------------------------------------------
 # Storage lives at the repo root (outside apps/api) so generated files never
