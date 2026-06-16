@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Memo-House — Share a Photo of Wolfsburg</title>
+  </head>
+  <body class="upload-body">
+    <main class="upload-card">
+      <header class="upload-header">
+        <h1>Memo-House</h1>
+        <p>Share an old photo of Wolfsburg and watch it come alive as an interactive 3D scene.</p>
+      </header>
+
+      <form id="upload-form" class="upload-form">
+        <label class="dropzone" id="dropzone">
+          <input id="file-input" type="file" accept="image/*" capture="environment" required />
+          <img id="image-preview" alt="" />
+          <span id="dropzone-hint" class="dropzone-hint">
+            <strong>Tap to choose a photo</strong>
+            <small>or take one now</small>
+          </span>
+        </label>
+
+        <label class="field">
+          <span>Photo name</span>
+          <input id="name-input" type="text" placeholder="e.g. Rathaus, 1962" maxlength="80" />
+        </label>
+
+        <label class="field">
+          <span>Your name</span>
+          <input id="author-input" type="text" placeholder="e.g. Anna" maxlength="60" />
+        </label>
+
+        <button id="upload-button" type="submit" disabled>Upload &amp; Generate</button>
+        <p id="status" class="status" role="status"></p>
+      </form>
+
+      <footer class="upload-footer">
+        <a href="/viewer.html" target="_blank" rel="noopener">Open the live viewer →</a>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/upload.js"></script>
+  </body>
+</html>

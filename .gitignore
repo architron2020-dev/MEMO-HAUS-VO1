@@ -1,0 +1,19 @@
+# Node
+node_modules/
+dist/
+*.log
+
+# Apple SHARP is an unmodified external dependency — not vendored into this repo.
+# It is cloned at a pinned commit by `npm run setup:ml-sharp` (see README).
+/packages/ml-sharp/
+
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Generated scenes / uploads (runtime storage)
+/storage/
+
+# OS
+.DS_Store
+Thumbs.db
