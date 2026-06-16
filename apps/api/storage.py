@@ -34,8 +34,8 @@ class Storage:
 
     def __init__(self, root: Path):
         self.root = root
-        self.uploads_dir = root / "uploads"
-        self.splats_dir = root / "splats"
+        self.uploads_dir = root / "Memo-album"
+        self.splats_dir = root / "Memo-splatted"
         self.index_path = root / "scenes.json"
         self._lock = threading.Lock()
 
