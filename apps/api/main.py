@@ -39,8 +39,8 @@ SUPPORTED_EXTENSIONS: set[str] = set()
 storage = Storage(STORAGE_DIR)
 engine = SharpEngine(device=DEVICE, checkpoint_path=Path(CHECKPOINT) if CHECKPOINT else None)
 
-# Set once the model has finished loading in the background warmup thread.
-_ready = threading.Event()
+_ready = threading.Event()        # set once model is loaded
+_processing = threading.Event()   # set while a prediction is running
 
 app = FastAPI(title="Memo-House API")
 app.add_middleware(
@@ -68,7 +68,7 @@ def on_startup() -> None:
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "model_ready": engine.ready, "device": engine.device}
+    return {"status": "ok", "model_ready": engine.ready, "device": engine.device, "processing": _processing.is_set()}
 
 
 @app.get("/api/latest")
@@ -109,11 +109,14 @@ def predict(
         f.write(image.file.read())
 
     LOGGER.info("Running SHARP inference for scene %s (%s)", scene_id, upload_path.name)
+    _processing.set()
     try:
         engine.predict_to_ply(upload_path, ply_path)
     except Exception as exc:
         LOGGER.exception("Inference failed for scene %s", scene_id)
         raise HTTPException(status_code=500, detail=f"Inference failed: {exc}") from exc
+    finally:
+        _processing.clear()
 
     scene = storage.add_scene(
         Scene(
@@ -135,9 +138,11 @@ def _serialize(scene: Scene) -> dict:
         "name": scene.name,
         "author": scene.author,
         "ply_url": scene.ply_url,
+        "image_url": scene.image_url,
         "created_at": scene.created_at,
     }
 
 
-# Serve generated PLYs (and let the viewer fetch them).
+# Serve generated PLYs and source uploads.
 app.mount("/outputs", StaticFiles(directory=str(storage.splats_dir)), name="outputs")
+app.mount("/uploads", StaticFiles(directory=str(storage.uploads_dir)), name="uploads")

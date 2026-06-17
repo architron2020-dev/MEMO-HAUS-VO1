@@ -10,6 +10,7 @@ export default defineConfig({
     proxy: {
       "/api": API_TARGET,
       "/outputs": API_TARGET,
+      "/uploads": API_TARGET,
     },
   },
   build: {

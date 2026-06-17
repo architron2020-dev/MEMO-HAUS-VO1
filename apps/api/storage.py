@@ -28,6 +28,10 @@ class Scene:
     def ply_url(self) -> str:
         return f"/outputs/{self.ply_file}"
 
+    @property
+    def image_url(self) -> str:
+        return f"/uploads/{self.image_file}"
+
 
 class Storage:
     """Filesystem-backed scene store. Thread-safe for concurrent requests."""

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 108" width="200" height="108" role="img" aria-label="Memo-Haus">
+  <!-- Orbital gaussian mark — centred -->
+  <g transform="translate(100,32)">
+    <ellipse rx="26" ry="11"
+      fill="none" stroke="#64c8ff" stroke-opacity="0.18" stroke-width="1.2"
+      transform="rotate(-18)"/>
+    <circle r="18"
+      fill="none" stroke="#64c8ff" stroke-opacity="0.38" stroke-width="1"/>
+    <line x1="-18" y1="0" x2="-24" y2="0"
+      stroke="#64c8ff" stroke-opacity="0.6" stroke-width="1.2"/>
+    <line x1="18" y1="0" x2="24" y2="0"
+      stroke="#64c8ff" stroke-opacity="0.6" stroke-width="1.2"/>
+    <circle r="7" fill="#64c8ff" fill-opacity="0.07"/>
+    <circle r="3.5" fill="#64c8ff" fill-opacity="0.92"/>
+    <circle r="1.4" cx="-0.7" cy="-0.7" fill="white" fill-opacity="0.85"/>
+  </g>
+
+  <!-- Wordmark — centred, no divider line -->
+  <g font-family="'Courier New',Courier,monospace" text-anchor="middle">
+    <text x="100" y="74" font-size="24" font-weight="700" letter-spacing="7"
+      fill="#64c8ff" fill-opacity="0.85">MEMO</text>
+    <text x="100" y="100" font-size="24" font-weight="700" letter-spacing="7"
+      fill="#dce8ff" fill-opacity="0.96">HAUS</text>
+  </g>
+</svg>

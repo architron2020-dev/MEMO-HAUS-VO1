@@ -4,23 +4,53 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Memo-Haus — Live Viewer</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
     <div id="viewer"></div>
+
+    <!-- Cinematic vignette -->
+    <div id="vignette"></div>
+
     <div id="transition-overlay"></div>
 
     <div id="placeholder">
-      <h1>Memo-Haus</h1>
-      <p>From Archive To Participatory Experience</p>
-      <p class="hint">Waiting for the first photo… scan the QR code to share one.</p>
+      <div class="placeholder-inner">
+        <img src="/logo.svg" alt="Memo-Haus" class="placeholder-logo" />
+        <p class="placeholder-sub">From Archive To Participatory Experience</p>
+        <p class="placeholder-hint">Scan the QR code to share a memory of this place.</p>
+      </div>
     </div>
 
-    <div id="caption" class="caption hidden">
-      <span id="caption-name" class="caption-name"></span>
-      <span id="caption-author" class="caption-author"></span>
+    <!-- Bottom-left sci-fi HUD: timer ring + memory readout -->
+    <div id="scene-hud" class="scene-hud hidden">
+      <div class="hud-ring">
+        <svg width="26" height="26" viewBox="0 0 26 26">
+          <circle class="timer-track"    cx="13" cy="13" r="10"/>
+          <circle class="timer-progress" cx="13" cy="13" r="10" id="timer-arc"/>
+        </svg>
+      </div>
+      <div class="hud-info">
+        <div class="hud-status">---- MEMORY ACTIVE ----</div>
+        <div class="hud-row">
+          <span class="hud-label">NAME</span>
+          <span id="caption-name" class="hud-value"></span>
+        </div>
+        <div class="hud-row" id="author-row">
+          <span class="hud-label">BY</span>
+          <span id="caption-author" class="hud-value hud-dim"></span>
+        </div>
+      </div>
     </div>
 
-    <div id="connection" class="connection" title="Backend connection"></div>
+    <!-- Bottom-right: processing pill -->
+    <div id="processing-loader" class="processing-loader hidden">
+      <div class="processing-dot"></div>
+      <span>Generating memory…</span>
+    </div>
+
+    <!-- Error dot -->
+    <div id="connection" class="connection"></div>
 
     <script type="module" src="/src/viewer.js"></script>
   </body>

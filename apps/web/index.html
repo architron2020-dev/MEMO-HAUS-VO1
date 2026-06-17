@@ -4,22 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Memo-Haus — Share a Photo of Wolfsburg</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body class="upload-body">
     <main class="upload-card">
       <header class="upload-header">
-        <h1>Memo-Haus</h1>
+        <img src="/logo.svg" alt="Memo-Haus" class="upload-logo" />
         <p class="caption-tagline">From Archive To Participatory Experience</p>
-        <p>Share an old photo of Wolfsburg and watch it come alive as an interactive 3D scene.</p>
+        <p>Share a photo from your Wolfsburg archive and watch it come alive as an immersive 3D scene.</p>
       </header>
 
       <form id="upload-form" class="upload-form">
         <label class="dropzone" id="dropzone">
-          <input id="file-input" type="file" accept="image/*" capture="environment" required />
+          <input id="file-input" type="file" accept="image/*" required />
           <img id="image-preview" alt="" />
           <span id="dropzone-hint" class="dropzone-hint">
             <strong>Tap to choose a photo</strong>
-            <small>or take one now</small>
           </span>
         </label>
 
