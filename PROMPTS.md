@@ -62,6 +62,7 @@ All prompts submitted in this project, in order from the very beginning.
 54. design a logo for both the interface
 55. make fonts more bold and visible and the typo and the letters should appear like getting typed for every scene and the typo and the wheel should take colours from the scenes and colours vary for every scene to tackle visibility and if the picture is black and white then retain the most visible bright colour for all the black and white other colour pictures take the contrast and bright colour for the typo and the wheel
 56. now execute everything that is said all now ui typo etc and update all the prompts to prompts md as well looks like its not updated
+57. okay add these features to the mobile ui such name of the person, memory of the year, a small memory story behind it
 
 ---
 
@@ -81,7 +82,7 @@ All prompts submitted in this project, in order from the very beginning.
 - Text block: `---- MEMORY ACTIVE ----` header → `NAME  <value>` → `BY  <value>`
 - **Typewriter**: characters typed one by one (55ms/char name, 48ms/char author), blinking `█` cursor, cursor fades after 1.2s
 - **Dynamic colour**: source image drawn to 80×80 canvas, HSL-sampled for most saturated non-dark/non-blown pixel → boosted to L=0.70, S×1.3 → applied as `--hc: r, g, b` CSS variable
-- B&W / desaturated (saturation < 0.14): fallback bright cyan `rgb(100, 200, 255)`
+- B&W / desaturated (saturation < 0.14): fallback bright cyan `rgb(17, 124, 255)`
 - HUD hides during transition overlay, shows after PLY loads
 
 ### Timer ring

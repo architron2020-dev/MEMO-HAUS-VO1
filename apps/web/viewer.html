@@ -22,16 +22,26 @@
       </div>
     </div>
 
+    <!-- Cinematic story overlay — center-bottom of scene -->
+    <div id="story-overlay" class="hidden">
+      <p id="overlay-story-text"></p>
+    </div>
+
     <!-- Bottom-left sci-fi HUD: timer ring + memory readout -->
     <div id="scene-hud" class="scene-hud hidden">
       <div class="hud-ring">
-        <svg width="26" height="26" viewBox="0 0 26 26">
-          <circle class="timer-track"    cx="13" cy="13" r="10"/>
-          <circle class="timer-progress" cx="13" cy="13" r="10" id="timer-arc"/>
+        <svg width="34" height="34" viewBox="0 0 34 34" class="hud-ring-svg">
+          <circle class="ring-frame" cx="17" cy="17" r="15.5"/>
+          <g class="ring-deco-group">
+            <circle class="ring-ticks" cx="17" cy="17" r="14"/>
+          </g>
+          <circle class="timer-track"    cx="17" cy="17" r="10"/>
+          <circle class="timer-progress" cx="17" cy="17" r="10" id="timer-arc"/>
+          <circle class="ring-pulse" cx="17" cy="17" r="2"/>
         </svg>
       </div>
       <div class="hud-info">
-        <div class="hud-status">---- MEMORY ACTIVE ----</div>
+        <div class="hud-status" id="hud-status"></div>
         <div class="hud-row">
           <span class="hud-label">NAME</span>
           <span id="caption-name" class="hud-value"></span>
@@ -40,6 +50,15 @@
           <span class="hud-label">BY</span>
           <span id="caption-author" class="hud-value hud-dim"></span>
         </div>
+        <div class="hud-row" id="year-row">
+          <span class="hud-label">YEAR</span>
+          <span id="caption-year" class="hud-value hud-year"></span>
+        </div>
+        <div class="hud-row" id="story-row">
+          <span class="hud-label">MEMO</span>
+          <span id="caption-story" class="hud-value hud-story"></span>
+        </div>
+
       </div>
     </div>
 
@@ -51,6 +70,18 @@
 
     <!-- Error dot -->
     <div id="connection" class="connection"></div>
+
+    <!-- Keyboard navigation guide -->
+    <div class="nav-hint">
+      <span class="nk">W S</span> / <span class="nk">↑ ↓</span> walk &nbsp;·&nbsp;
+      <span class="nk">A D</span> strafe &nbsp;·&nbsp;
+      <span class="nk">← →</span> turn head &nbsp;·&nbsp;
+      <span class="nk">Q E</span> up / down &nbsp;·&nbsp;
+      <span class="nk">drag</span> look &nbsp;·&nbsp;
+      <span class="nk">scroll</span> zoom &nbsp;·&nbsp;
+      <span class="nk">click</span> reset &nbsp;·&nbsp;
+      <span class="nk">F</span> fullscreen
+    </div>
 
     <script type="module" src="/src/viewer.js"></script>
   </body>

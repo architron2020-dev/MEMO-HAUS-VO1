@@ -12,6 +12,7 @@
         <img src="/logo.svg" alt="Memo-Haus" class="upload-logo" />
         <p class="caption-tagline">From Archive To Participatory Experience</p>
         <p>Share a photo from your Wolfsburg archive and watch it come alive as an immersive 3D scene.</p>
+        <p class="terminal-line">MEMORY UPLINK ESTABLISHED <span class="blink-cursor">█</span></p>
       </header>
 
       <form id="upload-form" class="upload-form">
@@ -21,16 +22,33 @@
           <span id="dropzone-hint" class="dropzone-hint">
             <strong>Tap to choose a photo</strong>
           </span>
+          <span class="corner corner-tl"></span>
+          <span class="corner corner-tr"></span>
+          <span class="corner corner-bl"></span>
+          <span class="corner corner-br"></span>
+          <span class="scan-sweep" id="scan-sweep"></span>
+          <span class="scan-label" id="scan-label">ANALYZING IMAGE…</span>
         </label>
 
         <label class="field">
-          <span>Photo name</span>
+          <span class="field-label-row">Title this memory <i class="field-dot" id="dot-name"></i></span>
           <input id="name-input" type="text" placeholder="e.g. Rathaus, 1962" maxlength="80" />
         </label>
 
         <label class="field">
-          <span>Your name</span>
+          <span class="field-label-row">Memory keeper <i class="field-dot" id="dot-author"></i></span>
           <input id="author-input" type="text" placeholder="e.g. Anna" maxlength="60" />
+        </label>
+
+        <label class="field">
+          <span class="field-label-row">When it happened <i class="field-dot" id="dot-year"></i></span>
+          <input id="year-input" type="text" placeholder="e.g. 1987" maxlength="10" inputmode="numeric" />
+        </label>
+
+        <label class="field">
+          <span class="field-label-row">Narrate your memory <i class="field-dot" id="dot-story"></i></span>
+          <textarea id="story-input" placeholder="A short memory behind this photo…" maxlength="280" rows="3"></textarea>
+          <span class="char-counter" id="char-counter">0 / 280</span>
         </label>
 
         <button id="upload-button" type="submit" disabled>Upload &amp; Generate</button>
@@ -40,6 +58,27 @@
       <footer class="upload-footer">
         <a href="/viewer.html" target="_blank" rel="noopener">Open the live viewer →</a>
       </footer>
+
+      <!-- Sci-fi "generating" overlay — spinning, radiating Memo-Haus mark -->
+      <div id="generating-overlay" class="generating-overlay hidden">
+        <div class="gen-stage">
+          <span class="gen-ring r1"></span>
+          <span class="gen-ring r2"></span>
+          <span class="gen-ring r3"></span>
+          <svg class="gen-mark" viewBox="0 0 32 32" width="56" height="56">
+            <g class="gen-mark-spin">
+              <ellipse cx="16" cy="16" rx="12" ry="5" fill="none" stroke="#64c8ff" stroke-opacity="0.35" stroke-width="1" transform="rotate(-18 16 16)"/>
+              <circle cx="16" cy="16" r="8.5" fill="none" stroke="#64c8ff" stroke-opacity="0.55" stroke-width="1"/>
+              <line x1="7.5" y1="16" x2="5" y2="16" stroke="#64c8ff" stroke-opacity="0.75" stroke-width="1"/>
+              <line x1="24.5" y1="16" x2="27" y2="16" stroke="#64c8ff" stroke-opacity="0.75" stroke-width="1"/>
+            </g>
+            <circle cx="16" cy="16" r="3.5" fill="#64c8ff" fill-opacity="0.12"/>
+            <circle cx="16" cy="16" r="1.8" fill="#64c8ff" fill-opacity="0.95" class="gen-core"/>
+          </svg>
+        </div>
+        <p class="gen-percent" id="gen-percent">0%</p>
+        <p class="gen-text"><span id="gen-text-content">DECODING LIGHT PATTERNS</span><span class="blink-cursor">█</span></p>
+      </div>
     </main>
 
     <script type="module" src="/src/upload.js"></script>

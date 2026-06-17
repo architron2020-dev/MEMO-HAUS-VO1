@@ -87,6 +87,8 @@ def predict(
     image: UploadFile = File(...),
     name: str = Form(""),
     author: str = Form(""),
+    year: str = Form(""),
+    story: str = Form(""),
 ) -> dict:
     suffix = Path(image.filename or "").suffix.lower()
     # Populate supported extensions on first upload (torch must be loaded by then)
@@ -103,7 +105,9 @@ def predict(
     if not _ready.wait(timeout=WARMUP_TIMEOUT):
         raise HTTPException(status_code=503, detail="Model is still warming up. Try again shortly.")
 
-    scene_id, upload_path, ply_path = storage.new_scene_paths(suffix)
+    scene_id, upload_path, ply_path = storage.new_scene_paths(
+        suffix, name=name, year=year, story=story
+    )
 
     with upload_path.open("wb") as f:
         f.write(image.file.read())
@@ -126,6 +130,8 @@ def predict(
             ply_file=ply_path.name,
             image_file=upload_path.name,
             created_at=now(),
+            year=year.strip(),
+            story=story.strip(),
         )
     )
     LOGGER.info("Scene %s ready -> %s", scene_id, scene.ply_url)
@@ -137,6 +143,8 @@ def _serialize(scene: Scene) -> dict:
         "id": scene.id,
         "name": scene.name,
         "author": scene.author,
+        "year": scene.year,
+        "story": scene.story,
         "ply_url": scene.ply_url,
         "image_url": scene.image_url,
         "created_at": scene.created_at,

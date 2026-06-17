@@ -93,6 +93,41 @@ html, body {
   letter-spacing: 0.03em;
 }
 
+/* ── Cinematic story overlay ─────────────────────────────────────────────── */
+
+#story-overlay {
+  --hc: 100, 200, 255;
+  position: fixed;
+  bottom: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 28;
+  max-width: 620px;
+  width: calc(100% - 80px);
+  text-align: center;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.7s ease;
+}
+
+#story-overlay.hidden {
+  opacity: 0;
+}
+
+#story-overlay p {
+  margin: 0;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.75;
+  color: rgba(var(--hc), 0.92);
+  text-shadow:
+    0 0 24px rgba(0, 0, 0, 0.95),
+    0 2px 10px rgba(0, 0, 0, 0.90),
+    0 0 2px rgba(0, 0, 0, 1);
+}
+
 /* ── Sci-fi scene HUD ────────────────────────────────────────────────────── */
 /*  --hc : the extracted scene colour as "r, g, b" — set per-scene in JS     */
 
@@ -116,10 +151,46 @@ html, body {
   transform: translateY(8px);
 }
 
-/* Timer ring */
+/* Sci-fi instrument ring: static frame + slow rotating tick ring +
+   functional countdown arc + pulsing "live" center dot */
 .hud-ring {
   flex-shrink: 0;
-  margin-top: 20px;
+  margin-top: 6px;
+}
+
+.hud-ring-svg { display: block; }
+
+.ring-frame {
+  fill: none;
+  stroke: rgba(var(--hc), 0.10);
+  stroke-width: 1;
+}
+
+.ring-deco-group {
+  transform-origin: 17px 17px;
+  animation: ring-rotate 9s linear infinite;
+}
+
+.ring-ticks {
+  fill: none;
+  stroke: rgba(var(--hc), 0.32);
+  stroke-width: 1;
+  stroke-dasharray: 1.8 5.6;
+}
+
+@keyframes ring-rotate {
+  to { transform: rotate(360deg); }
+}
+
+.ring-pulse {
+  fill: rgba(var(--hc), 0.92);
+  transform-origin: 17px 17px;
+  animation: ring-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes ring-pulse {
+  0%, 100% { opacity: 1;    transform: scale(1);    }
+  50%       { opacity: 0.32; transform: scale(0.55); }
 }
 
 .timer-track {
@@ -136,7 +207,7 @@ html, body {
   stroke-dasharray: 62.8;
   stroke-dashoffset: 62.8;
   transform: rotate(-90deg);
-  transform-origin: 13px 13px;
+  transform-origin: 17px 17px;
 }
 
 /* HUD text block */
@@ -154,6 +225,13 @@ html, body {
   color: rgba(var(--hc), 0.50);
   margin-bottom: 4px;
   line-height: 1;
+}
+
+/* Collapses automatically when empty; reappears for transient flashes
+   like "---- VIEW RESET ----" set directly in JS */
+.hud-status:empty {
+  margin-bottom: 0;
+  display: none;
 }
 
 .hud-row {
@@ -188,6 +266,34 @@ html, body {
   color: rgba(var(--hc), 0.72);
 }
 
+/* year row */
+#year-row .hud-value {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: rgba(var(--hc), 0.88);
+  letter-spacing: 0.14em;
+}
+
+/* story row — sentence case, wraps, smaller */
+#story-row {
+  align-items: flex-start;
+  margin-top: 4px;
+}
+
+#story-row .hud-label {
+  margin-top: 2px;
+}
+
+.hud-story {
+  font-size: 0.70rem;
+  font-weight: 600;
+  color: rgba(var(--hc), 0.78);
+  text-transform: none;
+  letter-spacing: 0.04em;
+  max-width: 320px;
+  line-height: 1.65;
+}
+
 /* blinking cursor appended during typewriter */
 .hud-cursor {
   display: inline-block;
@@ -198,6 +304,31 @@ html, body {
 @keyframes hud-blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }
+}
+
+/* ── Keyboard nav hint (bottom-right, always visible, very subtle) ──────── */
+
+.nav-hint {
+  --hc: 100, 200, 255;   /* default cyan; overwritten per scene via root var */
+  position: fixed;
+  bottom: 20px;
+  right: 36px;
+  z-index: 29;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(var(--hc), 0.62);
+  text-shadow: 0 0 10px rgba(var(--hc), 0.30);
+  pointer-events: none;
+  line-height: 1.6;
+}
+
+.nav-hint .nk {
+  color: rgba(var(--hc), 1);
+  font-weight: 800;
+  text-shadow: 0 0 8px rgba(var(--hc), 0.65);
 }
 
 /* ── Processing pill (bottom-right) ──────────────────────────────────────── */

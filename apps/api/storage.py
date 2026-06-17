@@ -8,11 +8,25 @@ streams the corresponding PLY from the `/outputs` static mount.
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+
+def _slugify(text: str, max_len: int) -> str:
+    """Lowercase, hyphenate, and truncate text for safe use in a filename."""
+    text = re.sub(r"[^a-z0-9]+", "-", (text or "").strip().lower())
+    return text.strip("-")[:max_len].strip("-")
+
+
+def _build_slug(name: str, year: str, story: str) -> str:
+    """Human-readable scene slug: <location>_<year>_<short-memory>_<uid>."""
+    parts = [p for p in (_slugify(name, 24), _slugify(year, 8), _slugify(story, 24)) if p]
+    base = "_".join(parts) or "memory"
+    return f"{base}_{uuid.uuid4().hex[:6]}"
 
 
 @dataclass
@@ -23,6 +37,8 @@ class Scene:
     ply_file: str          # filename inside the splats dir, e.g. "<id>.ply"
     image_file: str        # filename inside the uploads dir
     created_at: float      # unix seconds
+    year: str = ""
+    story: str = ""
 
     @property
     def ply_url(self) -> str:
@@ -59,9 +75,16 @@ class Storage:
         self.index_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
 
     # --- public API ----------------------------------------------------
-    def new_scene_paths(self, suffix: str) -> tuple[str, Path, Path]:
-        """Reserve an id and return (id, upload_path, ply_path)."""
-        scene_id = uuid.uuid4().hex[:12]
+    def new_scene_paths(
+        self, suffix: str, name: str = "", year: str = "", story: str = ""
+    ) -> tuple[str, Path, Path]:
+        """Reserve a human-readable scene id and return (id, upload_path, ply_path).
+
+        The id doubles as the filename stem for both the uploaded image and
+        the generated PLY, e.g. "rathaus_1987_first-bike-ride_4f9a2c", so the
+        Memo-album and Memo-splatted folders stay self-describing.
+        """
+        scene_id = _build_slug(name, year, story)
         upload_path = self.uploads_dir / f"{scene_id}{suffix}"
         ply_path = self.splats_dir / f"{scene_id}.ply"
         return scene_id, upload_path, ply_path
