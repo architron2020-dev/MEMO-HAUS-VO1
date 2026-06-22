@@ -34,9 +34,12 @@ const args = [
   "127.0.0.1",
   "--port",
   port,
-  // NOTE: uvicorn --reload watches this cwd (apps/api). Generated uploads/splats
-  // live in the repo-root `storage/` dir (see main.py), which is outside this
-  // tree, so writing a new memory never triggers a model-reloading restart.
+  // NOTE: --reload was tried here but its WatchFiles supervisor/worker
+  // process pair turned out to be a real source of instability (the worker
+  // would silently stop accepting connections with no crash trace, likely
+  // interacting badly with the heavy CPU work in registration_engine.py).
+  // Manually restart `npm run dev` after editing apps/api/*.py instead —
+  // less convenient, but far more reliable for this app's workload.
 ];
 
 const child = spawn(pythonPath, args, {

@@ -63,6 +63,7 @@ All prompts submitted in this project, in order from the very beginning.
 55. make fonts more bold and visible and the typo and the letters should appear like getting typed for every scene and the typo and the wheel should take colours from the scenes and colours vary for every scene to tackle visibility and if the picture is black and white then retain the most visible bright colour for all the black and white other colour pictures take the contrast and bright colour for the typo and the wheel
 56. now execute everything that is said all now ui typo etc and update all the prompts to prompts md as well looks like its not updated
 57. okay add these features to the mobile ui such name of the person, memory of the year, a small memory story behind it
+58. the project expands from single-image reconstruction into a collective memory-stitching system: combine multiple photos of the same place from different people/years into collective stitched 3D scenes; missing areas should stay black/unresolved rather than artificially completed; a continuously-running backend "memory brain" should store scenes, compare them, detect overlaps and gaps, and auto-stitch new uploads into matching gaps; results can become multiple Gaussian-stitched scenes organized by timeline/location/cluster (e.g. one scene for 1980s-90s, another for 2000s-2010s)
 
 ---
 

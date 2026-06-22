@@ -17,7 +17,9 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
+from memory_brain import MemoryBrain
 from sharp_engine import SharpEngine
 from storage import Scene, Storage, now
 
@@ -32,15 +34,31 @@ STORAGE_DIR = Path(os.environ.get("MEMO_STORAGE_DIR", _DEFAULT_STORAGE)).resolve
 DEVICE = os.environ.get("MEMO_DEVICE", "default")
 CHECKPOINT = os.environ.get("MEMO_CHECKPOINT")
 WARMUP_TIMEOUT = float(os.environ.get("MEMO_WARMUP_TIMEOUT", "900"))
+# Off by default: pairwise DUSt3R registration is a second heavy model
+# competing for the same 4GB GPU as SHARP. Set MEMO_ENABLE_REGISTRATION=1
+# to let the memory brain attempt real 3D alignment on likely-overlap pairs.
+ENABLE_REGISTRATION = os.environ.get("MEMO_ENABLE_REGISTRATION", "0") == "1"
 
 # Populated lazily on first upload (deferred to avoid importing torch at startup)
 SUPPORTED_EXTENSIONS: set[str] = set()
 
 storage = Storage(STORAGE_DIR)
 engine = SharpEngine(device=DEVICE, checkpoint_path=Path(CHECKPOINT) if CHECKPOINT else None)
+brain = MemoryBrain(storage, enable_registration=ENABLE_REGISTRATION)
 
 _ready = threading.Event()        # set once model is loaded
 _processing = threading.Event()   # set while a prediction is running
+
+# Lets the mobile app tell the viewer "show this specific memory now" without
+# touching the viewer's own polling/rotation logic at all — the viewer just
+# additionally checks this and calls its existing goToIndex() when it changes.
+_selection_lock = threading.Lock()
+_selected_scene_id: str | None = None
+_selected_at: float = 0.0
+
+
+class SelectScenePayload(BaseModel):
+    scene_id: str
 
 app = FastAPI(title="Memo-House API")
 app.add_middleware(
@@ -63,7 +81,16 @@ def _warmup() -> None:
 def on_startup() -> None:
     LOGGER.info("Storage at %s", STORAGE_DIR)
     LOGGER.info("Warming up SHARP model in the background (device=%s)...", engine.device)
+    LOGGER.info("Memory brain registration: %s", "ENABLED" if ENABLE_REGISTRATION else "disabled")
     threading.Thread(target=_warmup, name="sharp-warmup", daemon=True).start()
+    # Deliberately NOT calling brain.reconcile() synchronously here: when
+    # registration is enabled it can run slow (or hang on a flaky network
+    # call inside DUSt3R's checkpoint loader) CPU-bound work per candidate
+    # pair, and a blocking call in the startup handler would mean the whole
+    # API — including plain scene browsing — never finishes starting until
+    # every pair is processed. The background loop below picks everything
+    # up within its own first cycle instead, without blocking readiness.
+    brain.start_background_loop()
 
 
 @app.get("/api/health")
@@ -80,6 +107,59 @@ def latest() -> JSONResponse:
 @app.get("/api/scenes")
 def scenes() -> list[dict]:
     return [_serialize(s) for s in storage.list_scenes()]
+
+
+@app.get("/api/clusters")
+def clusters() -> dict:
+    """The memory brain's current view: locations, decade coverage, gaps,
+    and likely-overlap pairs (2D visual similarity, not 3D registration)."""
+    return brain.read()
+
+
+@app.post("/api/select-scene")
+def select_scene(payload: SelectScenePayload) -> dict:
+    """Mobile app calls this when the user picks a memory to view. The
+    viewer polls GET /api/select-scene and jumps to it via its normal,
+    unchanged goToIndex() — this only decides *which* scene, not how the
+    viewer shows it."""
+    global _selected_scene_id, _selected_at
+    with _selection_lock:
+        _selected_scene_id = payload.scene_id
+        _selected_at = now()
+        return {"scene_id": _selected_scene_id, "selected_at": _selected_at}
+
+
+@app.get("/api/select-scene")
+def get_selected_scene() -> dict:
+    with _selection_lock:
+        return {"scene_id": _selected_scene_id, "selected_at": _selected_at}
+
+
+@app.get("/api/stitched-scenes")
+def stitched_scenes() -> list[dict]:
+    """Collective scenes the brain successfully merged from 2+ confirmed,
+    registered photos of the same place. Shaped like /api/scenes so the
+    viewer can drop these straight into its normal rotation."""
+    data = brain.read()
+    out = []
+    for loc in data.get("locations", {}).values():
+        for overlap in loc.get("confirmed_overlaps", []):
+            stitched_name = overlap.get("stitched_ply")
+            if not stitched_name:
+                continue
+            out.append({
+                "id": f"stitched_{overlap['scene_a']}_{overlap['scene_b']}",
+                "name": f"{loc['location_label']} (collective)",
+                "author": "Collective memory",
+                "year": "",
+                "story": "Combined from multiple people's photos of this place.",
+                "cluster_id": "",
+                "ply_url": f"/stitched/{stitched_name}",
+                "image_url": None,
+                "created_at": 0,
+                "stitch_confidence": overlap.get("confidence"),
+            })
+    return out
 
 
 @app.post("/api/predict")
@@ -132,9 +212,15 @@ def predict(
             created_at=now(),
             year=year.strip(),
             story=story.strip(),
+            cluster_id=brain.cluster_id_for(name, year),
         )
     )
-    LOGGER.info("Scene %s ready -> %s", scene_id, scene.ply_url)
+    LOGGER.info("Scene %s ready -> %s (cluster %s)", scene_id, scene.ply_url, scene.cluster_id)
+    # Deliberately NOT spawning a fresh reconcile thread here: a new thread
+    # touching torch/CUDA right after SHARP's own GPU inference call is the
+    # kind of multi-threaded CUDA contention that produces cuDNN stream
+    # errors. The brain's existing 30s background loop (start_background_loop)
+    # picks this scene up on its own within half a minute.
     return _serialize(scene)
 
 
@@ -145,12 +231,14 @@ def _serialize(scene: Scene) -> dict:
         "author": scene.author,
         "year": scene.year,
         "story": scene.story,
+        "cluster_id": scene.cluster_id,
         "ply_url": scene.ply_url,
         "image_url": scene.image_url,
         "created_at": scene.created_at,
     }
 
 
-# Serve generated PLYs and source uploads.
+# Serve generated PLYs, source uploads, and stitched collective scenes.
 app.mount("/outputs", StaticFiles(directory=str(storage.splats_dir)), name="outputs")
 app.mount("/uploads", StaticFiles(directory=str(storage.uploads_dir)), name="uploads")
+app.mount("/stitched", StaticFiles(directory=str(storage.stitched_dir)), name="stitched")

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Memo-Haus — Help Complete a Memory</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="upload-body">
+    <button class="page-back" id="page-back" type="button">← Back</button>
+
+    <main class="upload-card">
+      <header class="upload-header">
+        <img src="/logo.svg" alt="Memo-Haus" class="upload-logo" />
+        <p class="caption-tagline">Collective Memory Archive</p>
+        <p>Some places have memories from some decades, but not others. Help fill in what's missing.</p>
+        <p class="terminal-line">SCANNING ARCHIVE FOR GAPS <span class="blink-cursor">█</span></p>
+      </header>
+
+      <!-- View 1: list of locations with missing decades -->
+      <section id="gap-browser">
+        <p id="gap-status" class="gap-status">Looking for incomplete memories…</p>
+        <div id="gap-list" class="gap-list"></div>
+
+        <footer class="upload-footer">
+          <a href="/index.html">Share a brand-new memory instead →</a>
+        </footer>
+      </section>
+
+      <!-- View 2: targeted upload form for the selected gap -->
+      <section id="contribute-form-section" class="hidden">
+        <button id="back-to-gaps" type="button" class="back-link">← back to all gaps</button>
+
+        <p class="contributing-to">
+          Contributing to <strong id="target-location"></strong> ·
+          <strong id="target-decade" class="hud-year-inline"></strong>
+        </p>
+
+        <form id="contribute-form" class="upload-form">
+          <label class="dropzone" id="dropzone">
+            <input id="file-input" type="file" accept="image/*" required />
+            <img id="image-preview" alt="" />
+            <span id="dropzone-hint" class="dropzone-hint">
+              <strong>Tap to choose a photo</strong>
+            </span>
+            <span class="corner corner-tl"></span>
+            <span class="corner corner-tr"></span>
+            <span class="corner corner-bl"></span>
+            <span class="corner corner-br"></span>
+            <span class="scan-sweep" id="scan-sweep"></span>
+            <span class="scan-label" id="scan-label">ANALYZING IMAGE…</span>
+          </label>
+
+          <label class="field">
+            <span class="field-label-row"><span class="field-index">01</span>Memory keeper <i class="field-dot" id="dot-author"></i></span>
+            <input id="author-input" type="text" placeholder="e.g. Anna" maxlength="60" />
+          </label>
+
+          <label class="field">
+            <span class="field-label-row"><span class="field-index">02</span>When it happened <i class="field-dot" id="dot-year"></i></span>
+            <input id="year-input" type="text" placeholder="e.g. 1992" maxlength="10" inputmode="numeric" />
+          </label>
+
+          <label class="field">
+            <span class="field-label-row"><span class="field-index">03</span>Narrate your memory <i class="field-dot" id="dot-story"></i></span>
+            <textarea id="story-input" placeholder="A short memory behind this photo…" maxlength="280" rows="3"></textarea>
+            <span class="char-counter" id="char-counter">0 / 280</span>
+          </label>
+
+          <button id="upload-button" type="submit" disabled>Initiate Reconstruction</button>
+          <p id="status" class="status" role="status"></p>
+        </form>
+      </section>
+
+      <!-- Reconstruction overlay — the photo decoding into spatial memory -->
+      <div id="generating-overlay" class="generating-overlay hidden">
+        <div class="gen-stage">
+          <span class="gen-ring r1"></span>
+          <span class="gen-ring r2"></span>
+          <span class="gen-ring r3"></span>
+          <svg class="gen-mark" viewBox="0 0 32 32" width="56" height="56">
+            <g class="gen-mark-spin">
+              <ellipse cx="16" cy="16" rx="12" ry="5" fill="none" stroke="#64c8ff" stroke-opacity="0.40" stroke-width="1" transform="rotate(-18 16 16)"/>
+              <circle cx="16" cy="16" r="8.5" fill="none" stroke="#64c8ff" stroke-opacity="0.55" stroke-width="1"/>
+              <line x1="7.5" y1="16" x2="5" y2="16" stroke="#64c8ff" stroke-opacity="0.75" stroke-width="1"/>
+              <line x1="24.5" y1="16" x2="27" y2="16" stroke="#64c8ff" stroke-opacity="0.75" stroke-width="1"/>
+            </g>
+            <circle cx="16" cy="16" r="3.5" fill="#e8a33d" fill-opacity="0.18"/>
+            <circle cx="16" cy="16" r="1.8" fill="#e8a33d" fill-opacity="0.95" class="gen-core"/>
+          </svg>
+        </div>
+        <p class="gen-percent" id="gen-percent">0%</p>
+        <p class="gen-text"><span id="gen-text-content">DECODING LIGHT PATTERNS</span><span class="blink-cursor">█</span></p>
+      </div>
+    </main>
+
+    <script type="module" src="/src/contribute.js"></script>
+  </body>
+</html>

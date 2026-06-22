@@ -1,6 +1,10 @@
 :root {
   color-scheme: dark;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Amber is reserved for exactly one meaning across the whole app:
+     "the system is actively generating something right now." */
+  --accent-active: 232, 163, 61;
 }
 
 html, body {
@@ -218,19 +222,7 @@ html, body {
   font-family: "Courier New", "Courier", monospace;
 }
 
-.hud-status {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  color: rgba(var(--hc), 0.50);
-  margin-bottom: 4px;
-  line-height: 1;
-}
-
-/* Collapses automatically when empty; reappears for transient flashes
-   like "---- VIEW RESET ----" set directly in JS */
 .hud-status:empty {
-  margin-bottom: 0;
   display: none;
 }
 
@@ -345,12 +337,12 @@ html, body {
   background: rgba(8, 8, 12, 0.72);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(100, 200, 255, 0.10);
+  border: 1px solid rgba(var(--accent-active), 0.30);
   border-radius: 999px;
   font-family: "Courier New", "Courier", monospace;
   font-size: 0.68rem;
   letter-spacing: 0.10em;
-  color: rgba(100, 200, 255, 0.55);
+  color: rgba(var(--accent-active), 0.75);
   pointer-events: none;
   opacity: 1;
   transition: opacity 0.6s ease;
@@ -362,8 +354,8 @@ html, body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: rgba(100, 200, 255, 0.9);
-  box-shadow: 0 0 6px rgba(100, 200, 255, 0.7);
+  background: rgba(var(--accent-active), 0.9);
+  box-shadow: 0 0 6px rgba(var(--accent-active), 0.7);
   animation: pulse 1.6s ease-in-out infinite;
   flex-shrink: 0;
 }

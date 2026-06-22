@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Memo-Haus — Browse Memories</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="upload-body">
+    <button class="page-back" id="page-back" type="button">← Back</button>
+
+    <main class="upload-card">
+      <header class="upload-header">
+        <img src="/logo.svg" alt="Memo-Haus" class="upload-logo" />
+        <p class="caption-tagline">Browse The Archive</p>
+        <p>Pick a memory below and it will appear on the viewer right now.</p>
+        <p class="terminal-line">LOADING MEMORIES <span class="blink-cursor">█</span></p>
+      </header>
+
+      <!-- Stitched / collective scenes — kept clearly separate so they're
+           never buried under however many individual photos exist -->
+      <section id="stitched-section">
+        <p class="stitched-heading">⬡ Collective Memories (Stitched)</p>
+        <p id="stitched-status" class="gap-status"></p>
+        <div id="stitched-list" class="memories-list"></div>
+      </section>
+
+      <section id="individual-section">
+        <p class="individual-heading">Individual Memories</p>
+        <p id="memories-status" class="gap-status"></p>
+        <div id="memories-list" class="memories-list"></div>
+      </section>
+
+      <footer class="upload-footer">
+        <a href="/index.html">Share a new memory instead →</a>
+        <br />
+        <a href="/viewer.html" target="_blank" rel="noopener">Open the live viewer →</a>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/memories.js"></script>
+  </body>
+</html>

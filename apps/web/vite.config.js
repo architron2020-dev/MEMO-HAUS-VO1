@@ -11,6 +11,7 @@ export default defineConfig({
       "/api": API_TARGET,
       "/outputs": API_TARGET,
       "/uploads": API_TARGET,
+      "/stitched": API_TARGET,
     },
   },
   build: {
@@ -18,6 +19,8 @@ export default defineConfig({
       input: {
         upload: resolve(__dirname, "index.html"),
         viewer: resolve(__dirname, "viewer.html"),
+        contribute: resolve(__dirname, "contribute.html"),
+        memories: resolve(__dirname, "memories.html"),
       },
     },
   },

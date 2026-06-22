@@ -9,8 +9,10 @@ const captionNameEl = document.getElementById("caption-name");
 const captionAuthEl = document.getElementById("caption-author");
 const captionYearEl = document.getElementById("caption-year");
 const captionStoryEl = document.getElementById("caption-story");
+const captionClusterEl = document.getElementById("caption-cluster");
 const authorRowEl   = document.getElementById("author-row");
 const yearRowEl     = document.getElementById("year-row");
+const clusterRowEl  = document.getElementById("cluster-row");
 const storyRowEl    = document.getElementById("story-row");
 const connectionEl  = document.getElementById("connection");
 const loaderEl           = document.getElementById("processing-loader");
@@ -191,6 +193,18 @@ async function showHud(scene, onDwellEnd) {
     cancelTypewriters.push(c3);
   } else {
     yearRowEl.style.display = "none";
+  }
+
+  // cluster_id is "<location-slug>__<decade>", assigned by the backend's
+  // memory brain — show the era half as a quiet hint that this scene is
+  // grouped with other memories of the same place and decade.
+  const era = scene.cluster_id ? scene.cluster_id.split("__")[1] : "";
+  if (era && era !== "undated") {
+    clusterRowEl.style.display = "";
+    const c6 = typewrite(captionClusterEl, era.toUpperCase(), 60);
+    cancelTypewriters.push(c6);
+  } else {
+    clusterRowEl.style.display = "none";
   }
 
   if (storyOverlayTimer) { clearTimeout(storyOverlayTimer); storyOverlayTimer = null; }
@@ -491,12 +505,17 @@ function goToIndex(index) {
 
 async function poll() {
   try {
-    const res = await fetch("/api/scenes", { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const [scenesRes, stitchedRes] = await Promise.all([
+      fetch("/api/scenes", { cache: "no-store" }),
+      fetch("/api/stitched-scenes", { cache: "no-store" }).catch(() => null),
+    ]);
+    if (!scenesRes.ok) throw new Error(`HTTP ${scenesRes.status}`);
     clearTimeout(errorTimer);
     connectionEl.dataset.state = "";
 
-    const all   = await res.json();
+    const individual = await scenesRes.json();
+    const stitched = stitchedRes && stitchedRes.ok ? await stitchedRes.json() : [];
+    const all = [...individual, ...stitched];
     if (!all.length) return;
     const known = new Set(scenes.map(s => s.id));
     const fresh = all.filter(s => !known.has(s.id));
@@ -517,6 +536,32 @@ async function pollStatus() {
     if (!res.ok) return;
     const { processing } = await res.json();
     loaderEl.classList.toggle("hidden", !processing);
+  } catch { /* ignore */ }
+}
+
+// ── Mobile-app scene selection ──────────────────────────────────────────
+// Purely additive: the mobile app's "browse memories" page can ask the
+// viewer to jump to a specific memory. This only decides *which* index to
+// jump to — it calls the same goToIndex() the normal rotation already uses,
+// so dwell time, transitions, and auto-advance afterward are all unchanged.
+
+let lastSelectionAt = 0;
+
+async function pollSelection() {
+  try {
+    const res = await fetch("/api/select-scene", { cache: "no-store" });
+    if (!res.ok) return;
+    const { scene_id, selected_at } = await res.json();
+    if (!scene_id || !selected_at || selected_at <= lastSelectionAt) return;
+    lastSelectionAt = selected_at;
+
+    let index = scenes.findIndex(s => s.id === scene_id);
+    if (index === -1) {
+      // Requested scene isn't in our local list yet — refresh and retry once.
+      await poll();
+      index = scenes.findIndex(s => s.id === scene_id);
+    }
+    if (index !== -1) goToIndex(index);
   } catch { /* ignore */ }
 }
 
@@ -615,3 +660,4 @@ flyLoop();
 poll();
 setInterval(poll, POLL_INTERVAL);
 setInterval(pollStatus, STATUS_INTERVAL);
+setInterval(pollSelection, 2_000);  // snappier than POLL_INTERVAL — this is a direct user action

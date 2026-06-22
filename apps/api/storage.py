@@ -39,6 +39,7 @@ class Scene:
     created_at: float      # unix seconds
     year: str = ""
     story: str = ""
+    cluster_id: str = ""   # "<location-slug>__<decade>", assigned by the memory brain
 
     @property
     def ply_url(self) -> str:
@@ -56,11 +57,13 @@ class Storage:
         self.root = root
         self.uploads_dir = root / "Memo-album"
         self.splats_dir = root / "Memo-splatted"
+        self.stitched_dir = root / "Memo-stitched"
         self.index_path = root / "scenes.json"
         self._lock = threading.Lock()
 
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.splats_dir.mkdir(parents=True, exist_ok=True)
+        self.stitched_dir.mkdir(parents=True, exist_ok=True)
         if not self.index_path.exists():
             self._write_index([])
 

@@ -1,0 +1,152 @@
+@import "./contribute.css";
+
+.stitched-heading,
+.individual-heading {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  margin: 0 0 4px;
+}
+
+.stitched-heading {
+  color: rgba(var(--accent-active), 0.90);
+}
+
+.individual-heading {
+  color: rgba(var(--hc), 0.45);
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(var(--hc), 0.10);
+}
+
+.memories-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+/* Stitched cards get the amber "collective work" accent throughout the
+   app, distinguishing them at a glance from individually-uploaded photos */
+#stitched-list .memory-card {
+  border-color: rgba(var(--accent-active), 0.25);
+}
+
+#stitched-list .memory-card:hover {
+  border-color: rgba(var(--accent-active), 0.60);
+  background: rgba(var(--accent-active), 0.06);
+}
+
+#stitched-list .memory-card.active {
+  border-color: rgba(var(--accent-active), 0.85);
+  background: rgba(var(--accent-active), 0.10);
+}
+
+#stitched-list .memory-name {
+  color: rgba(var(--accent-active), 0.95);
+}
+
+#stitched-list .memory-thumb.placeholder {
+  border-color: rgba(var(--accent-active), 0.25);
+  color: rgba(var(--accent-active), 0.55);
+}
+
+#stitched-list .memory-go {
+  border-color: rgba(var(--accent-active), 0.40);
+  color: rgba(var(--accent-active), 0.90);
+}
+
+#stitched-list .memory-card:hover .memory-go {
+  background: rgba(var(--accent-active), 0.18);
+  border-color: rgba(var(--accent-active), 0.75);
+}
+
+.memory-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(var(--hc), 0.15);
+  border-radius: 4px;
+  padding: 10px 12px;
+  background: rgba(var(--hc), 0.02);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.memory-card:hover {
+  border-color: rgba(var(--hc), 0.50);
+  background: rgba(var(--hc), 0.05);
+}
+
+.memory-card.active {
+  border-color: rgba(var(--accent-active), 0.70);
+  background: rgba(var(--accent-active), 0.08);
+}
+
+.memory-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid rgba(var(--hc), 0.15);
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.memory-thumb.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.60rem;
+  font-weight: 700;
+  color: rgba(var(--hc), 0.30);
+}
+
+.memory-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.memory-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(var(--hc), 0.88);
+  margin: 0 0 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.memory-meta {
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--hc), 0.35);
+}
+
+.memory-go {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border: 1px solid rgba(var(--hc), 0.35);
+  border-radius: 4px;
+  background: rgba(var(--hc), 0.06);
+  color: rgba(var(--hc), 0.85);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.memory-card:hover .memory-go {
+  background: rgba(var(--hc), 0.16);
+  border-color: rgba(var(--hc), 0.70);
+}
+
+.memory-card.active .memory-go {
+  border-color: rgba(var(--accent-active), 0.85);
+  color: rgba(var(--accent-active), 0.95);
+}
