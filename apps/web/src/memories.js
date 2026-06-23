@@ -1,4 +1,7 @@
 import "./memories.css";
+import { initThemeToggle } from "./theme.js";
+
+initThemeToggle();
 
 const statusEl = document.getElementById("memories-status");
 const listEl = document.getElementById("memories-list");

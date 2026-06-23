@@ -5,8 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Memo-Haus — Share a Photo of Wolfsburg</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // Applied before first paint so there's no flash of the wrong theme —
+      // saved choice wins, otherwise fall back to the OS-level preference.
+      (function () {
+        var saved = localStorage.getItem("memo-theme");
+        var theme = saved || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
   </head>
   <body class="upload-body">
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle light/dark mode">🌙</button>
     <main class="upload-card">
       <header class="upload-header">
         <img src="/logo.svg" alt="Memo-Haus" class="upload-logo" />

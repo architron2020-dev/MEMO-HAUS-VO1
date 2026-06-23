@@ -1,4 +1,7 @@
 import "./contribute.css";
+import { initThemeToggle } from "./theme.js";
+
+initThemeToggle();
 
 // ── DOM refs ────────────────────────────────────────────────────────────
 

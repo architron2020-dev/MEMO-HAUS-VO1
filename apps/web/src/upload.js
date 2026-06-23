@@ -1,4 +1,7 @@
 import "./upload.css";
+import { initThemeToggle } from "./theme.js";
+
+initThemeToggle();
 
 const form = document.getElementById("upload-form");
 const fileInput = document.getElementById("file-input");
