@@ -40,6 +40,7 @@ class Scene:
     year: str = ""
     story: str = ""
     cluster_id: str = ""   # "<location-slug>__<decade>", assigned by the memory brain
+    audio_file: str = ""   # filename inside the audio dir — voice note or cropped music; "" if none
 
     @property
     def ply_url(self) -> str:
@@ -48,6 +49,10 @@ class Scene:
     @property
     def image_url(self) -> str:
         return f"/uploads/{self.image_file}"
+
+    @property
+    def audio_url(self) -> str | None:
+        return f"/audio/{self.audio_file}" if self.audio_file else None
 
 
 class Storage:
@@ -58,12 +63,14 @@ class Storage:
         self.uploads_dir = root / "Memo-album"
         self.splats_dir = root / "Memo-splatted"
         self.stitched_dir = root / "Memo-stitched"
+        self.audio_dir = root / "Memo-audio"
         self.index_path = root / "scenes.json"
         self._lock = threading.Lock()
 
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.splats_dir.mkdir(parents=True, exist_ok=True)
         self.stitched_dir.mkdir(parents=True, exist_ok=True)
+        self.audio_dir.mkdir(parents=True, exist_ok=True)
         if not self.index_path.exists():
             self._write_index([])
 
@@ -92,6 +99,13 @@ class Storage:
         ply_path = self.splats_dir / f"{scene_id}.ply"
         return scene_id, upload_path, ply_path
 
+    def audio_path_for(self, scene_id: str, suffix: str) -> Path:
+        """Audio file lives in Memo-audio under the SAME stem as the photo/
+        splat for that scene_id — e.g. "rathaus_1987_..._4f9a2c.webm" next to
+        "rathaus_1987_..._4f9a2c.jpg" and "...ply", so all three are tagged
+        identically and trivially associable by filename alone."""
+        return self.audio_dir / f"{scene_id}{suffix}"
+
     def add_scene(self, scene: Scene) -> Scene:
         with self._lock:
             records = self._read_index()
@@ -106,6 +120,25 @@ class Storage:
     def latest(self) -> Scene | None:
         records = self._read_index()
         return Scene(**records[-1]) if records else None
+
+    def delete_scene(self, scene_id: str) -> Scene | None:
+        """Remove a scene's record and its files (source image + splat PLY).
+        Returns the deleted Scene, or None if no such scene exists. Does NOT
+        touch stitched files or the memory brain index — that's the caller's
+        job (main.py calls brain.delete_scene_references after this)."""
+        with self._lock:
+            records = self._read_index()
+            match = next((r for r in records if r["id"] == scene_id), None)
+            if match is None:
+                return None
+            self._write_index([r for r in records if r["id"] != scene_id])
+
+        scene = Scene(**match)
+        (self.uploads_dir / scene.image_file).unlink(missing_ok=True)
+        (self.splats_dir / scene.ply_file).unlink(missing_ok=True)
+        if scene.audio_file:
+            (self.audio_dir / scene.audio_file).unlink(missing_ok=True)
+        return scene
 
 
 def now() -> float:

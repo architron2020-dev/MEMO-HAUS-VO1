@@ -82,10 +82,54 @@ function buildMemoryCard(memory) {
       <p class="memory-meta">${escapeHtml(memory.author)}${memory.year ? " · " + escapeHtml(memory.year) : ""}</p>
     </div>
     <button type="button" class="memory-go">Show</button>
+    <button type="button" class="memory-delete" aria-label="Delete this memory">🗑</button>
   `;
 
   card.addEventListener("click", () => selectMemory(memory, card));
+
+  const deleteBtn = card.querySelector(".memory-delete");
+  deleteBtn.addEventListener("click", (event) => {
+    event.stopPropagation(); // don't also trigger selectMemory via the card click
+    handleDeleteClick(memory, card, deleteBtn);
+  });
+
   return card;
+}
+
+// Two-step inline confirm — no native confirm() dialog, matches the rest of
+// this app's custom UI. First click arms it; a second click within 3s
+// actually deletes; otherwise it quietly reverts.
+function handleDeleteClick(memory, cardEl, btnEl) {
+  if (btnEl.dataset.confirming === "1") {
+    deleteMemory(memory, cardEl);
+    return;
+  }
+  btnEl.dataset.confirming = "1";
+  btnEl.textContent = "Confirm?";
+  btnEl.classList.add("confirming");
+  btnEl._revertTimer = setTimeout(() => {
+    btnEl.dataset.confirming = "0";
+    btnEl.textContent = "🗑";
+    btnEl.classList.remove("confirming");
+  }, 3000);
+}
+
+async function deleteMemory(memory, cardEl) {
+  const isStitched = memory.id.startsWith("stitched_");
+  const target = isStitched ? stitchedStatusEl : statusEl;
+
+  cardEl.classList.add("deleting");
+  try {
+    const res = await fetch(`/api/scenes/${encodeURIComponent(memory.id)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    cardEl.remove();
+    target.textContent = `Deleted "${memory.name}".`;
+  } catch (err) {
+    console.error(err);
+    cardEl.classList.remove("deleting");
+    target.textContent = `Could not delete "${memory.name}": ${err.message}`;
+  }
 }
 
 function escapeHtml(str) {

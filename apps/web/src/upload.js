@@ -73,6 +73,7 @@ const dotName   = document.getElementById("dot-name");
 const dotAuthor = document.getElementById("dot-author");
 const dotYear   = document.getElementById("dot-year");
 const dotStory  = document.getElementById("dot-story");
+const dotAudio  = document.getElementById("dot-audio");
 
 // Each entry: { file: File, year: string }. With exactly one photo selected,
 // the shared "When it happened" field is used instead of a per-photo year —
@@ -168,6 +169,476 @@ function renderSelection() {
   });
 }
 
+// ── Audio: record voice, browse music, or upload a file — then crop ───────
+// `selectedAudioBlob` is whichever one the user lands on; it's attached to
+// every photo in the current submission (a batch upload is still one
+// "moment" being shared, so one voice note / one music clip for all of it).
+// Both the recording and the crop range are hard-capped to MAX_AUDIO_SECONDS
+// so a memory's sound never outlasts the time it's actually shown for.
+
+const MAX_AUDIO_SECONDS = 60; // must match the viewer's DWELL_MS (60_000ms)
+
+const audioEmptyEl = document.getElementById("audio-empty");
+const recordVoiceBtn = document.getElementById("record-voice-btn");
+const browseMusicBtn = document.getElementById("browse-music-btn");
+const uploadAudioBtn = document.getElementById("upload-audio-btn");
+const audioFileInput = document.getElementById("audio-file-input");
+const audioRecordingEl = document.getElementById("audio-recording");
+const recordTimerEl = document.getElementById("record-timer");
+const recordProgressFillEl = document.getElementById("record-progress-fill");
+const stopRecordBtn = document.getElementById("stop-record-btn");
+const audioPreviewEl = document.getElementById("audio-preview");
+const audioPreviewPlayer = document.getElementById("audio-preview-player");
+const removeAudioBtn = document.getElementById("remove-audio-btn");
+const musicBrowserEl = document.getElementById("music-browser");
+const musicSearchInput = document.getElementById("music-search-input");
+const musicSearchBtn = document.getElementById("music-search-btn");
+const musicResultsEl = document.getElementById("music-results");
+const closeMusicBrowserBtn = document.getElementById("close-music-browser-btn");
+const musicCropEl = document.getElementById("music-crop");
+const cropTrackTitleEl = document.getElementById("crop-track-title");
+const cropPlayer = document.getElementById("crop-player");
+const waveformWrapEl = document.getElementById("waveform-wrap");
+const waveformCanvas = document.getElementById("waveform-canvas");
+const cropBoxEl = document.getElementById("crop-box");
+const cropHandleLeftEl = document.getElementById("crop-handle-left");
+const cropHandleRightEl = document.getElementById("crop-handle-right");
+const cropPlayheadEl = document.getElementById("crop-playhead");
+const cropStartLabel = document.getElementById("crop-start-label");
+const cropEndLabel = document.getElementById("crop-end-label");
+const cropDurationLabel = document.getElementById("crop-duration-label");
+const previewCropBtn = document.getElementById("preview-crop-btn");
+const confirmCropBtn = document.getElementById("confirm-crop-btn");
+const cancelCropBtn = document.getElementById("cancel-crop-btn");
+
+let selectedAudioBlob = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordStartTime = 0;
+let recordTimerInterval = null;
+
+let decodedBuffer = null;   // currently-loaded AudioBuffer for the crop UI
+let cropDuration = 0;
+let cropStartSec = 0;
+let cropEndSec = 0;
+let previewRaf = null;
+
+function showAudioPanel(panel) {
+  [audioEmptyEl, audioRecordingEl, audioPreviewEl, musicBrowserEl, musicCropEl]
+    .forEach(el => el.classList.add("hidden"));
+  panel.classList.remove("hidden");
+}
+
+function setSelectedAudio(blob) {
+  selectedAudioBlob = blob;
+  dotAudio.classList.toggle("filled", !!blob);
+}
+
+function formatTime(secs) {
+  secs = Math.max(0, Math.floor(secs));
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+}
+
+function resetAudioUI() {
+  setSelectedAudio(null);
+  showAudioPanel(audioEmptyEl);
+  audioPreviewPlayer.removeAttribute("src");
+  decodedBuffer = null;
+  audioFileInput.value = "";
+  cropPlayer.pause();
+  cancelAnimationFrame(previewRaf);
+}
+
+// Guards against accidentally losing a recording or clip you already made —
+// starting a new recording, browsing music, or uploading a file all replace
+// `selectedAudioBlob`, so confirm first if there's already something there.
+function confirmReplaceIfNeeded() {
+  if (!selectedAudioBlob) return true;
+  return window.confirm("You already have a voice note or music clip added. Replace it with a new one?");
+}
+
+// --- Voice recording — auto-stops at MAX_AUDIO_SECONDS ---
+
+recordVoiceBtn.addEventListener("click", async () => {
+  if (!confirmReplaceIfNeeded()) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+      setSelectedAudio(blob);
+      audioPreviewPlayer.src = URL.createObjectURL(blob);
+      showAudioPanel(audioPreviewEl);
+      clearInterval(recordTimerInterval);
+    };
+    mediaRecorder.start();
+    recordStartTime = Date.now();
+    recordProgressFillEl.style.width = "0%";
+    recordTimerInterval = setInterval(() => {
+      const secs = Math.floor((Date.now() - recordStartTime) / 1000);
+      recordTimerEl.textContent = formatTime(secs);
+      recordProgressFillEl.style.width = `${Math.min(100, (secs / MAX_AUDIO_SECONDS) * 100)}%`;
+      if (secs >= MAX_AUDIO_SECONDS && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop(); // hits the memory's display-time cap — stop automatically
+      }
+    }, 200);
+    showAudioPanel(audioRecordingEl);
+  } catch (err) {
+    console.error(err);
+    const reason = err.name === "NotAllowedError"
+      ? "Microphone permission was denied. Allow it in your browser's site settings and try again."
+      : err.message;
+    setStatus(`Could not access microphone: ${reason}`, "error");
+  }
+});
+
+stopRecordBtn.addEventListener("click", () => {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+});
+
+removeAudioBtn.addEventListener("click", resetAudioUI);
+
+// --- Music browsing (Openverse via our own backend proxy — multilingual:
+// it's a plain text search, so any language works, but only against
+// openly-licensed tracks, not mainstream commercial music) ---
+
+browseMusicBtn.addEventListener("click", () => {
+  if (!confirmReplaceIfNeeded()) return;
+  showAudioPanel(musicBrowserEl);
+  musicSearchInput.focus();
+});
+
+closeMusicBrowserBtn.addEventListener("click", resetAudioUI);
+
+async function searchMusic() {
+  const q = musicSearchInput.value.trim();
+  if (!q) return;
+  musicResultsEl.innerHTML = `<p class="music-status">Searching…</p>`;
+  try {
+    const res = await fetch(`/api/music/search?q=${encodeURIComponent(q)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    renderMusicResults(await res.json());
+  } catch (err) {
+    console.error(err);
+    musicResultsEl.innerHTML = `<p class="music-status">Search failed: ${err.message}</p>`;
+  }
+}
+musicSearchBtn.addEventListener("click", searchMusic);
+musicSearchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); searchMusic(); }
+});
+
+function renderMusicResults(tracks) {
+  if (!tracks.length) {
+    musicResultsEl.innerHTML = `<p class="music-status">No tracks found — try another search.</p>`;
+    return;
+  }
+  musicResultsEl.innerHTML = "";
+  for (const track of tracks) {
+    const row = document.createElement("div");
+    row.className = "music-result-row";
+    row.innerHTML = `
+      <div class="music-result-info">
+        <p class="music-result-title">${escapeHtml(track.title)}</p>
+        <p class="music-result-meta">${escapeHtml(track.creator)}</p>
+      </div>
+      <button type="button" class="music-crop-btn">Crop &amp; Use</button>
+    `;
+    row.querySelector(".music-crop-btn").addEventListener("click", () => {
+      // Stream through our own backend — third-party hosts rarely send CORS
+      // headers, which would otherwise block the Web Audio decode below.
+      const proxiedUrl = `/api/music/fetch?url=${encodeURIComponent(track.audio_url)}`;
+      openCropUI(proxiedUrl, `${track.title} — ${track.creator}`);
+    });
+    musicResultsEl.appendChild(row);
+  }
+}
+
+// --- Upload an audio file directly — feeds the same crop UI ---
+
+uploadAudioBtn.addEventListener("click", () => {
+  if (!confirmReplaceIfNeeded()) return;
+  audioFileInput.click();
+});
+audioFileInput.addEventListener("change", () => {
+  const file = audioFileInput.files?.[0];
+  if (!file) return;
+  openCropUI(URL.createObjectURL(file), file.name);
+});
+
+// --- Crop UI: real waveform with a draggable selection box ────────────────
+
+async function openCropUI(sourceUrl, title) {
+  showAudioPanel(musicCropEl);
+  cropTrackTitleEl.textContent = title;
+
+  try {
+    const res = await fetch(sourceUrl);
+    const arrayBuffer = await res.arrayBuffer();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+    audioCtx.close();
+  } catch (err) {
+    console.error(err);
+    setStatus(`Could not load that audio: ${err.message}`, "error");
+    resetAudioUI();
+    return;
+  }
+
+  cropPlayer.src = sourceUrl;
+  cropDuration = decodedBuffer.duration;
+  cropStartSec = 0;
+  cropEndSec = Math.min(cropDuration, MAX_AUDIO_SECONDS);
+  cropPlayheadEl.classList.remove("hidden");
+
+  drawWaveform(decodedBuffer);
+  requestAnimationFrame(() => {
+    positionCropBox();
+    positionPlayhead(cropStartSec); // wait one frame so the canvas has real layout size
+  });
+}
+
+function drawWaveform(buffer) {
+  const ctx = waveformCanvas.getContext("2d");
+  const width = waveformCanvas.width;
+  const height = waveformCanvas.height;
+  const mid = height / 2;
+  ctx.clearRect(0, 0, width, height);
+
+  const hc = getComputedStyle(document.documentElement).getPropertyValue("--hc").trim() || "100, 200, 255";
+  ctx.fillStyle = `rgba(${hc}, 0.55)`;
+
+  const data = buffer.getChannelData(0);
+  const samplesPerPixel = Math.max(1, Math.floor(data.length / width));
+  for (let x = 0; x < width; x++) {
+    let min = 1, max = -1;
+    const start = x * samplesPerPixel;
+    for (let i = 0; i < samplesPerPixel; i++) {
+      const v = data[start + i] || 0;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const y1 = mid + min * mid;
+    const y2 = mid + max * mid;
+    ctx.fillRect(x, y1, 1, Math.max(1, y2 - y1));
+  }
+}
+
+function updateCropLabels() {
+  cropStartLabel.textContent = formatTime(cropStartSec);
+  cropEndLabel.textContent = formatTime(cropEndSec);
+  cropDurationLabel.textContent = `${Math.round(cropEndSec - cropStartSec)}s`;
+}
+
+function positionCropBox() {
+  const width = waveformWrapEl.clientWidth || waveformCanvas.width;
+  if (!cropDuration) return;
+  const pxPerSec = width / cropDuration;
+  const leftPx = cropStartSec * pxPerSec;
+  const rightPx = cropEndSec * pxPerSec;
+  cropBoxEl.style.left = `${leftPx}px`;
+  cropBoxEl.style.width = `${Math.max(6, rightPx - leftPx)}px`;
+  updateCropLabels();
+}
+
+function secFromClientX(clientX) {
+  const rect = waveformWrapEl.getBoundingClientRect();
+  const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+  return (x / rect.width) * cropDuration;
+}
+
+function wireDrag(handleEl, mode) {
+  handleEl.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleEl.setPointerCapture(e.pointerId);
+    const grabStartSec = secFromClientX(e.clientX);
+    const boxStartAtGrab = cropStartSec;
+    const boxEndAtGrab = cropEndSec;
+
+    const onMove = (ev) => {
+      if (mode === "left") {
+        let t = secFromClientX(ev.clientX);
+        t = Math.max(0, Math.min(t, cropEndSec - 0.2));
+        if (cropEndSec - t > MAX_AUDIO_SECONDS) t = cropEndSec - MAX_AUDIO_SECONDS;
+        cropStartSec = t;
+      } else if (mode === "right") {
+        let t = secFromClientX(ev.clientX);
+        t = Math.min(cropDuration, Math.max(t, cropStartSec + 0.2));
+        if (t - cropStartSec > MAX_AUDIO_SECONDS) t = cropStartSec + MAX_AUDIO_SECONDS;
+        cropEndSec = t;
+      } else {
+        const widthSec = boxEndAtGrab - boxStartAtGrab;
+        const deltaSec = secFromClientX(ev.clientX) - grabStartSec;
+        let newStart = boxStartAtGrab + deltaSec;
+        newStart = Math.max(0, Math.min(cropDuration - widthSec, newStart));
+        cropStartSec = newStart;
+        cropEndSec = newStart + widthSec;
+      }
+      positionCropBox();
+    };
+    const onUp = () => {
+      handleEl.releasePointerCapture(e.pointerId);
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+  });
+}
+wireDrag(cropHandleLeftEl, "left");
+wireDrag(cropHandleRightEl, "right");
+wireDrag(cropBoxEl, "move");
+
+function positionPlayhead(sec) {
+  const width = waveformWrapEl.clientWidth || waveformCanvas.width;
+  cropPlayheadEl.style.left = `${(sec / cropDuration) * width}px`;
+}
+
+// Keeps the playhead in sync with playback. `stopAtSec` set => stops there
+// (used by the Preview button); null => plays freely to the track's end
+// (used by scrubbing, so people can audition anywhere, not just the crop window).
+function trackPlayhead(stopAtSec) {
+  cancelAnimationFrame(previewRaf);
+  const tick = () => {
+    if (cropPlayer.paused || (stopAtSec != null && cropPlayer.currentTime >= stopAtSec)) {
+      if (stopAtSec != null && cropPlayer.currentTime >= stopAtSec) cropPlayer.pause();
+      return;
+    }
+    positionPlayhead(cropPlayer.currentTime);
+    previewRaf = requestAnimationFrame(tick);
+  };
+  previewRaf = requestAnimationFrame(tick);
+}
+
+previewCropBtn.addEventListener("click", () => {
+  cropPlayer.currentTime = cropStartSec;
+  cropPlayer.play().catch(() => {});
+  positionPlayhead(cropStartSec);
+  trackPlayhead(cropEndSec);
+});
+
+// Click or drag anywhere on the waveform (outside the crop box itself, which
+// has its own drag-to-move handler) to scrub the playhead and preview from
+// wherever you like — not limited to the current crop window.
+function scrubTo(clientX) {
+  const t = secFromClientX(clientX);
+  cropPlayer.currentTime = t;
+  positionPlayhead(t);
+}
+
+function startScrubDrag(target, e) {
+  e.preventDefault();
+  e.stopPropagation();
+  target.setPointerCapture(e.pointerId);
+  scrubTo(e.clientX);
+  cropPlayer.play().catch(() => {});
+  trackPlayhead(null);
+
+  const onMove = (ev) => scrubTo(ev.clientX);
+  const onUp = () => {
+    target.releasePointerCapture(e.pointerId);
+    document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
+  };
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerup", onUp);
+}
+
+// Grab the playhead directly and drag it anywhere to preview from there...
+cropPlayheadEl.addEventListener("pointerdown", (e) => startScrubDrag(cropPlayheadEl, e));
+
+// ...or click/drag anywhere else on the waveform (outside the crop box,
+// which has its own drag-to-move handler) to jump the playhead there.
+waveformWrapEl.addEventListener("pointerdown", (e) => {
+  if (e.target === cropBoxEl || e.target === cropHandleLeftEl || e.target === cropHandleRightEl || e.target === cropPlayheadEl) return;
+  startScrubDrag(waveformWrapEl, e);
+});
+
+cancelCropBtn.addEventListener("click", resetAudioUI);
+
+confirmCropBtn.addEventListener("click", () => {
+  confirmCropBtn.disabled = true;
+  confirmCropBtn.textContent = "Cropping…";
+  try {
+    const blob = cropDecodedBufferToBlob(decodedBuffer, cropStartSec, cropEndSec);
+    setSelectedAudio(blob);
+    audioPreviewPlayer.src = URL.createObjectURL(blob);
+    showAudioPanel(audioPreviewEl);
+  } catch (err) {
+    console.error(err);
+    setStatus(`Could not crop that track: ${err.message}`, "error");
+  } finally {
+    confirmCropBtn.disabled = false;
+    confirmCropBtn.textContent = "Use this clip";
+  }
+});
+
+// Slice the already-decoded buffer and re-encode as a 16-bit PCM WAV — no
+// re-fetch needed since openCropUI() already decoded it for the waveform.
+function cropDecodedBufferToBlob(buffer, startSec, endSec) {
+  const sampleRate = buffer.sampleRate;
+  const startSample = Math.floor(startSec * sampleRate);
+  const endSample = Math.min(Math.floor(endSec * sampleRate), buffer.length);
+  const frameCount = Math.max(0, endSample - startSample);
+  const numChannels = buffer.numberOfChannels;
+
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const cropped = audioCtx.createBuffer(numChannels, frameCount, sampleRate);
+  for (let ch = 0; ch < numChannels; ch++) {
+    cropped.copyToChannel(buffer.getChannelData(ch).subarray(startSample, endSample), ch);
+  }
+  audioCtx.close();
+  return encodeWav(cropped);
+}
+
+function encodeWav(audioBuffer) {
+  const numChannels = audioBuffer.numberOfChannels;
+  const sampleRate = audioBuffer.sampleRate;
+  const numFrames = audioBuffer.length;
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const dataSize = numFrames * blockAlign;
+
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  const writeString = (offset, str) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bytesPerSample * 8, true);
+  writeString(36, "data");
+  view.setUint32(40, dataSize, true);
+
+  const channelData = [];
+  for (let ch = 0; ch < numChannels; ch++) channelData.push(audioBuffer.getChannelData(ch));
+
+  let offset = 44;
+  for (let i = 0; i < numFrames; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const sample = Math.max(-1, Math.min(1, channelData[ch][i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      offset += 2;
+    }
+  }
+
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedFiles.length) return;
@@ -199,6 +670,10 @@ form.addEventListener("submit", async (event) => {
       formData.append("author", authorInput.value);
       formData.append("year", effectiveYear);
       formData.append("story", storyInput.value);
+      if (selectedAudioBlob) {
+        const filename = selectedAudioBlob.type.includes("wav") ? "clip.wav" : "voice.webm";
+        formData.append("audio", selectedAudioBlob, filename);
+      }
 
       const response = await fetch("/api/predict", { method: "POST", body: formData });
       if (!response.ok) {
@@ -249,6 +724,7 @@ function resetForm() {
   selectedFiles = [];
   fileInput.value = "";
   renderSelection();
+  resetAudioUI();
 
   form.querySelectorAll("input[type=text], textarea").forEach(el => (el.value = ""));
   [dotName, dotAuthor, dotYear, dotStory].forEach(d => d.classList.remove("filled"));

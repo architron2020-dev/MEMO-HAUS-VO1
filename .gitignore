@@ -17,3 +17,6 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Self-signed dev HTTPS cert (regenerate with scripts/make-dev-cert.sh)
+apps/web/.cert/

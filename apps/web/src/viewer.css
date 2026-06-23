@@ -2,6 +2,11 @@
   color-scheme: dark;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 
+  /* Default cyan before any scene's colour has been extracted — every
+     element that doesn't declare its own --hc (e.g. .nav-hint) inherits
+     this until applyHudColor() overwrites it per-scene. */
+  --hc: 100, 200, 255;
+
   /* Amber is reserved for exactly one meaning across the whole app:
      "the system is actively generating something right now." */
   --accent-active: 232, 163, 61;
@@ -171,7 +176,7 @@ html, body {
 }
 
 .ring-deco-group {
-  transform-origin: 17px 17px;
+  transform-origin: 22px 22px;
   animation: ring-rotate 9s linear infinite;
 }
 
@@ -179,7 +184,7 @@ html, body {
   fill: none;
   stroke: rgba(var(--hc), 0.32);
   stroke-width: 1;
-  stroke-dasharray: 1.8 5.6;
+  stroke-dasharray: 2.2 7;
 }
 
 @keyframes ring-rotate {
@@ -188,7 +193,7 @@ html, body {
 
 .ring-pulse {
   fill: rgba(var(--hc), 0.92);
-  transform-origin: 17px 17px;
+  transform-origin: 22px 22px;
   animation: ring-pulse 1.8s ease-in-out infinite;
 }
 
@@ -208,10 +213,10 @@ html, body {
   stroke: rgba(var(--hc), 0.82);
   stroke-width: 1.5;
   stroke-linecap: round;
-  stroke-dasharray: 62.8;
-  stroke-dashoffset: 62.8;
+  stroke-dasharray: 81.68;
+  stroke-dashoffset: 81.68;
   transform: rotate(-90deg);
-  transform-origin: 17px 17px;
+  transform-origin: 22px 22px;
 }
 
 /* HUD text block */
@@ -233,18 +238,20 @@ html, body {
 }
 
 .hud-label {
-  font-size: 0.62rem;
-  font-weight: 700;
+  font-size: 0.70rem;
+  font-weight: 800;
   letter-spacing: 0.16em;
   color: rgba(var(--hc), 0.55);
-  min-width: 38px;
+  min-width: 42px;
   text-transform: uppercase;
   line-height: 1.5;
 }
 
+/* Every HUD value (name/author/year/era/story) shares one font size —
+   only weight/opacity/case vary to express hierarchy, never size. */
 .hud-value {
-  font-size: 0.90rem;
-  font-weight: 700;
+  font-size: 1.05rem;
+  font-weight: 800;
   letter-spacing: 0.10em;
   color: rgba(var(--hc), 1);
   text-transform: uppercase;
@@ -253,20 +260,17 @@ html, body {
 
 /* author row slightly dimmer */
 #author-row .hud-value {
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 700;
   color: rgba(var(--hc), 0.72);
 }
 
 /* year row */
 #year-row .hud-value {
-  font-size: 0.82rem;
-  font-weight: 700;
   color: rgba(var(--hc), 0.88);
   letter-spacing: 0.14em;
 }
 
-/* story row — sentence case, wraps, smaller */
+/* story row — sentence case, wraps */
 #story-row {
   align-items: flex-start;
   margin-top: 4px;
@@ -277,8 +281,7 @@ html, body {
 }
 
 .hud-story {
-  font-size: 0.70rem;
-  font-weight: 600;
+  font-weight: 700;
   color: rgba(var(--hc), 0.78);
   text-transform: none;
   letter-spacing: 0.04em;
@@ -301,14 +304,15 @@ html, body {
 /* ── Keyboard nav hint (bottom-right, always visible, very subtle) ──────── */
 
 .nav-hint {
-  --hc: 100, 200, 255;   /* default cyan; overwritten per scene via root var */
+  /* No local --hc here on purpose — it must inherit the adaptive value set
+     on :root by applyHudColor(), the same one driving the HUD's colour. */
   position: fixed;
   bottom: 20px;
   right: 36px;
   z-index: 29;
   font-family: "Courier New", Courier, monospace;
-  font-size: 0.74rem;
-  font-weight: 700;
+  font-size: 0.88rem;
+  font-weight: 800;
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: rgba(var(--hc), 0.62);
@@ -319,7 +323,7 @@ html, body {
 
 .nav-hint .nk {
   color: rgba(var(--hc), 1);
-  font-weight: 800;
+  font-weight: 900;
   text-shadow: 0 0 8px rgba(var(--hc), 0.65);
 }
 

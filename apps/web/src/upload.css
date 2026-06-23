@@ -2,7 +2,25 @@
   color-scheme: dark;
   --hc: 100, 200, 255;         /* primary identity / data colour */
   --accent-active: 232, 163, 61; /* amber — reserved for "operation in progress" only */
+  --page-bg: #000;
+  --card-bg: rgba(4, 5, 8, 0.88);
+  --card-shadow: 0 0 40px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(var(--hc), 0.05);
+  --overlay-bg: rgba(0, 0, 0, 0.92);
   font-family: "Courier New", Courier, monospace;
+}
+
+/* Light mode — same sci-fi structure, daylight-readable palette. Nearly
+   every text/border colour in this stylesheet derives from --hc / --accent-
+   active, so re-tinting those two plus the few literal black/white panel
+   backgrounds re-skins the whole page without touching individual rules. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --hc: 20, 90, 150;            /* deep blue — same role, readable on light bg */
+  --accent-active: 178, 110, 16; /* darker amber — keeps contrast on light bg */
+  --page-bg: #eef1f5;
+  --card-bg: rgba(255, 255, 255, 0.90);
+  --card-shadow: 0 0 30px rgba(20, 40, 70, 0.12), 0 0 0 1px rgba(var(--hc), 0.08);
+  --overlay-bg: rgba(255, 255, 255, 0.92);
 }
 
 * { box-sizing: border-box; }
@@ -15,7 +33,35 @@
   justify-content: center;
   padding: 20px;
   position: relative;
-  background: #000;
+  background: var(--page-bg);
+}
+
+/* Theme toggle — top-right, same floating-pill language as .page-back */
+.theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(var(--hc), 0.25);
+  border-radius: 999px;
+  background: rgba(var(--hc), 0.06);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(var(--hc), 0.85);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.theme-toggle:hover {
+  background: rgba(var(--hc), 0.14);
+  border-color: rgba(var(--hc), 0.55);
 }
 
 /* Faint technical grid — texture, not glow */
@@ -74,13 +120,13 @@
   z-index: 1;
   width: 100%;
   max-width: 420px;
-  background: rgba(4, 5, 8, 0.88);
+  background: var(--card-bg);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid rgba(var(--hc), 0.12);
   border-radius: 4px;
   padding: 32px 28px;
-  box-shadow: 0 0 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(var(--hc), 0.05);
+  box-shadow: var(--card-shadow);
 }
 
 /* Reconstruction overlay — the photo decoding into spatial memory */
@@ -93,7 +139,7 @@
   align-items: center;
   justify-content: center;
   gap: 18px;
-  background: rgba(0, 0, 0, 0.92);
+  background: var(--overlay-bg);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-radius: 4px;
@@ -562,6 +608,370 @@
   outline: none;
   border-color: rgba(var(--hc), 0.50);
   background: rgba(var(--hc), 0.04);
+}
+
+/* ── Audio: voice note / music / upload + crop ────────────────────────── */
+
+.audio-hint {
+  margin: -2px 0 8px;
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  color: rgba(var(--hc), 0.30);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.audio-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.audio-option-btn {
+  flex: 1 1 28%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  border: 1px solid rgba(var(--hc), 0.25);
+  border-radius: 4px;
+  background: rgba(var(--hc), 0.04);
+  color: rgba(var(--hc), 0.85);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.audio-option-btn:hover {
+  background: rgba(var(--hc), 0.12);
+  border-color: rgba(var(--hc), 0.55);
+  transform: translateY(-1px);
+}
+
+/* Creative icon treatment — a soft pulsing glow behind each emoji,
+   tinted to the same colour system as the rest of the HUD */
+.audio-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audio-icon {
+  font-size: 1.05rem;
+  opacity: 0.85;
+}
+
+/* Recording state */
+.rec-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 90, 90, 0.95);
+  box-shadow: 0 0 6px rgba(255, 90, 90, 0.8);
+  animation: rec-blink 1s step-end infinite;
+}
+
+@keyframes rec-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.25; }
+}
+
+.record-progress-track {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(var(--hc), 0.10);
+  overflow: hidden;
+}
+
+.record-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: rgba(255, 90, 90, 0.75);
+  transition: width 0.2s linear;
+}
+
+.music-note {
+  margin: -2px 0 4px;
+  font-size: 0.56rem;
+  letter-spacing: 0.02em;
+  color: rgba(var(--hc), 0.28);
+  line-height: 1.5;
+}
+
+.audio-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(var(--hc), 0.15);
+  border-radius: 4px;
+  background: rgba(var(--hc), 0.02);
+}
+
+.audio-panel.hidden { display: none; }
+.audio-options.hidden { display: none; }
+
+.audio-status-text {
+  margin: 0;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--accent-active), 0.85);
+}
+
+#record-timer {
+  color: rgba(var(--accent-active), 1);
+  font-weight: 700;
+}
+
+.audio-panel-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.audio-panel-actions button:not(.audio-remove-btn) {
+  flex: 1;
+  padding: 9px 10px;
+  border: 1px solid rgba(var(--hc), 0.35);
+  border-radius: 4px;
+  background: rgba(var(--hc), 0.06);
+  color: rgba(var(--hc), 0.90);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.audio-panel-actions button:not(.audio-remove-btn):hover {
+  background: rgba(var(--hc), 0.16);
+}
+
+.audio-remove-btn {
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 90, 90, 0.30);
+  border-radius: 4px;
+  background: rgba(255, 90, 90, 0.06);
+  color: rgba(255, 120, 120, 0.85);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.audio-remove-btn:hover {
+  background: rgba(255, 90, 90, 0.16);
+}
+
+#audio-preview-player {
+  width: 100%;
+  height: 32px;
+}
+
+/* Music search */
+.music-search-row {
+  display: flex;
+  gap: 8px;
+}
+
+.music-search-row input {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(var(--hc), 0.15);
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(var(--hc), 0.90);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.74rem;
+}
+
+.music-search-row input::placeholder { color: rgba(var(--hc), 0.22); }
+
+.music-search-row input:focus {
+  outline: none;
+  border-color: rgba(var(--hc), 0.50);
+}
+
+.music-search-row button {
+  padding: 9px 14px;
+  border: 1px solid rgba(var(--hc), 0.35);
+  border-radius: 4px;
+  background: rgba(var(--hc), 0.08);
+  color: rgba(var(--hc), 0.90);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.music-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.music-status {
+  margin: 4px 0;
+  font-size: 0.66rem;
+  color: rgba(var(--hc), 0.35);
+  text-align: center;
+}
+
+.music-result-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(var(--hc), 0.12);
+  border-radius: 4px;
+}
+
+.music-result-info { flex: 1; min-width: 0; }
+
+.music-result-title {
+  margin: 0 0 2px;
+  font-size: 0.70rem;
+  font-weight: 700;
+  color: rgba(var(--hc), 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-result-meta {
+  margin: 0;
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(var(--hc), 0.35);
+}
+
+.music-crop-btn {
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border: 1px solid rgba(var(--accent-active), 0.40);
+  border-radius: 4px;
+  background: rgba(var(--accent-active), 0.08);
+  color: rgba(var(--accent-active), 0.95);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.music-crop-btn:hover {
+  background: rgba(var(--accent-active), 0.18);
+}
+
+/* Waveform + draggable crop box — replaces the old start/end sliders with
+   a real visual selection over the actual track, capped at MAX_AUDIO_SECONDS */
+.waveform-wrap {
+  position: relative;
+  width: 100%;
+  height: 64px;
+  border-radius: 4px;
+  border: 1px solid rgba(var(--hc), 0.15);
+  background: rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  touch-action: none;
+}
+
+#waveform-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.crop-box {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 60px;
+  background: rgba(var(--accent-active), 0.16);
+  border-left: 2px solid rgba(var(--accent-active), 0.95);
+  border-right: 2px solid rgba(var(--accent-active), 0.95);
+  cursor: grab;
+}
+
+.crop-box:active { cursor: grabbing; }
+
+.crop-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  cursor: ew-resize;
+}
+
+.crop-handle-left  { left: -7px; }
+.crop-handle-right { right: -7px; }
+
+.crop-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 22px;
+  margin: -11px 0 0 -2px;
+  border-radius: 2px;
+  background: rgba(var(--accent-active), 1);
+  box-shadow: 0 0 6px rgba(var(--accent-active), 0.7);
+}
+
+.crop-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  margin-left: -8px;
+  cursor: ew-resize;
+  z-index: 3;
+}
+
+.crop-playhead::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+}
+
+.crop-playhead.hidden { display: none; }
+
+.crop-range-label {
+  margin: 0;
+  text-align: center;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--hc), 0.55);
+}
+
+.crop-range-label span {
+  color: rgba(var(--accent-active), 0.90);
+  font-weight: 700;
 }
 
 /* Upload button */

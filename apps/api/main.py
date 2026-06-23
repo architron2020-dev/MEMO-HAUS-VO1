@@ -13,9 +13,10 @@ import os
 import threading
 from pathlib import Path
 
+import requests
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -135,6 +136,27 @@ def get_selected_scene() -> dict:
         return {"scene_id": _selected_scene_id, "selected_at": _selected_at}
 
 
+@app.delete("/api/scenes/{scene_id}")
+def delete_scene(scene_id: str) -> dict:
+    """Delete a memory. For an individual photo: removes its record, source
+    image, and splat file, plus any stitched scenes that depended on it
+    (a merge of A+B is meaningless once one side is gone). For a stitched
+    scene (id starts with 'stitched_'): removes only that merge, leaving
+    its two source scenes untouched."""
+    if scene_id.startswith("stitched_"):
+        removed = brain.delete_stitched_scene(scene_id)
+        if not removed:
+            raise HTTPException(status_code=404, detail="Stitched scene not found")
+        return {"deleted": scene_id}
+
+    scene = storage.delete_scene(scene_id)
+    if scene is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    brain.delete_scene_references(scene_id)
+    LOGGER.info("Deleted scene %s (and its files)", scene_id)
+    return {"deleted": scene_id}
+
+
 @app.get("/api/stitched-scenes")
 def stitched_scenes() -> list[dict]:
     """Collective scenes the brain successfully merged from 2+ confirmed,
@@ -162,6 +184,55 @@ def stitched_scenes() -> list[dict]:
     return out
 
 
+@app.get("/api/music/search")
+def music_search(q: str) -> list[dict]:
+    """Proxies Openverse's free, keyless audio search (Creative Commons /
+    openly-licensed tracks) — the mobile app's "Browse Music" picker calls
+    this directly, no API key needed on either side."""
+    if not q.strip():
+        return []
+    try:
+        resp = requests.get(
+            "https://api.openverse.org/v1/audio/",
+            params={"q": q, "page_size": 12},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Music search failed: {exc}") from exc
+
+    return [
+        {
+            "id": item.get("id"),
+            "title": item.get("title") or "Untitled",
+            "creator": item.get("creator") or "Unknown artist",
+            "audio_url": item.get("url"),
+            "duration_ms": item.get("duration"),
+            "license": item.get("license"),
+        }
+        for item in data.get("results", [])
+        if item.get("url")
+    ]
+
+
+@app.get("/api/music/fetch")
+def music_fetch(url: str) -> StreamingResponse:
+    """Streams a third-party track through our own origin. The mobile app's
+    crop UI needs to decode the audio with the Web Audio API, which fails on
+    cross-origin media unless the third-party host sends CORS headers (most
+    don't) — fetching same-origin through here sidesteps that entirely."""
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid url")
+    try:
+        upstream = requests.get(url, stream=True, timeout=15)
+        upstream.raise_for_status()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not fetch track: {exc}") from exc
+    content_type = upstream.headers.get("Content-Type", "audio/mpeg")
+    return StreamingResponse(upstream.iter_content(chunk_size=8192), media_type=content_type)
+
+
 @app.post("/api/predict")
 def predict(
     image: UploadFile = File(...),
@@ -169,6 +240,7 @@ def predict(
     author: str = Form(""),
     year: str = Form(""),
     story: str = Form(""),
+    audio: UploadFile | None = File(None),
 ) -> dict:
     suffix = Path(image.filename or "").suffix.lower()
     # Populate supported extensions on first upload (torch must be loaded by then)
@@ -192,6 +264,18 @@ def predict(
     with upload_path.open("wb") as f:
         f.write(image.file.read())
 
+    # Save the optional voice note / cropped music clip under the same
+    # filename stem as the photo and splat — same "tagging" scheme as the
+    # image, just in Memo-audio instead of Memo-album.
+    audio_filename = ""
+    if audio is not None and audio.filename:
+        audio_suffix = Path(audio.filename).suffix.lower() or ".webm"
+        audio_path = storage.audio_path_for(scene_id, audio_suffix)
+        with audio_path.open("wb") as f:
+            f.write(audio.file.read())
+        audio_filename = audio_path.name
+        LOGGER.info("Saved audio for scene %s -> %s", scene_id, audio_filename)
+
     LOGGER.info("Running SHARP inference for scene %s (%s)", scene_id, upload_path.name)
     _processing.set()
     try:
@@ -213,6 +297,7 @@ def predict(
             year=year.strip(),
             story=story.strip(),
             cluster_id=brain.cluster_id_for(name, year),
+            audio_file=audio_filename,
         )
     )
     LOGGER.info("Scene %s ready -> %s (cluster %s)", scene_id, scene.ply_url, scene.cluster_id)
@@ -234,11 +319,13 @@ def _serialize(scene: Scene) -> dict:
         "cluster_id": scene.cluster_id,
         "ply_url": scene.ply_url,
         "image_url": scene.image_url,
+        "audio_url": scene.audio_url,
         "created_at": scene.created_at,
     }
 
 
-# Serve generated PLYs, source uploads, and stitched collective scenes.
+# Serve generated PLYs, source uploads, stitched collective scenes, and audio.
 app.mount("/outputs", StaticFiles(directory=str(storage.splats_dir)), name="outputs")
 app.mount("/uploads", StaticFiles(directory=str(storage.uploads_dir)), name="uploads")
 app.mount("/stitched", StaticFiles(directory=str(storage.stitched_dir)), name="stitched")
+app.mount("/audio", StaticFiles(directory=str(storage.audio_dir)), name="audio")

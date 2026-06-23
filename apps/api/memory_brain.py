@@ -144,6 +144,61 @@ class MemoryBrain:
     def read(self) -> dict[str, Any]:
         return self._read()
 
+    def delete_scene_references(self, scene_id: str) -> None:
+        """Called after storage.delete_scene() removes a scene's record/files.
+        Strips that scene out of every location's overlap lists and decade
+        buckets, and deletes any stitched files that depended on it — a
+        stitched scene merging A+B is meaningless once A or B is gone."""
+        data = self._read()
+        locations = data.get("locations", {})
+        changed = False
+
+        for loc in locations.values():
+            for key in ("confirmed_overlaps", "rejected_overlaps", "likely_overlaps"):
+                kept = []
+                for entry in loc.get(key, []):
+                    if entry.get("scene_a") == scene_id or entry.get("scene_b") == scene_id:
+                        changed = True
+                        stitched_name = entry.get("stitched_ply")
+                        if stitched_name:
+                            (self.storage.stitched_dir / stitched_name).unlink(missing_ok=True)
+                        continue
+                    kept.append(entry)
+                loc[key] = kept
+
+            for bucket in loc.get("decades", {}).values():
+                if scene_id in bucket.get("scene_ids", []):
+                    bucket["scene_ids"].remove(scene_id)
+                    changed = True
+
+        if changed:
+            with self._lock:
+                self._write(data)
+
+    def delete_stitched_scene(self, stitched_id: str) -> bool:
+        """Delete one collective/stitched scene by its synthetic id
+        'stitched_<scene_a>_<scene_b>'. Only removes the merge — the two
+        source scenes it was built from are untouched. Returns True if found."""
+        data = self._read()
+        found = False
+        for loc in data.get("locations", {}).values():
+            kept = []
+            for entry in loc.get("confirmed_overlaps", []):
+                this_id = f"stitched_{entry['scene_a']}_{entry['scene_b']}"
+                if this_id == stitched_id:
+                    found = True
+                    stitched_name = entry.get("stitched_ply")
+                    if stitched_name:
+                        (self.storage.stitched_dir / stitched_name).unlink(missing_ok=True)
+                    continue
+                kept.append(entry)
+            loc["confirmed_overlaps"] = kept
+
+        if found:
+            with self._lock:
+                self._write(data)
+        return found
+
     def reconcile(self) -> dict[str, Any]:
         """Full recompute pass: regroup every scene into location/decade
         clusters, recompute gaps, and re-run overlap detection. This is the

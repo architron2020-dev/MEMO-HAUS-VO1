@@ -30,14 +30,14 @@
     <!-- Bottom-left sci-fi HUD: timer ring + memory readout -->
     <div id="scene-hud" class="scene-hud hidden">
       <div class="hud-ring">
-        <svg width="34" height="34" viewBox="0 0 34 34" class="hud-ring-svg">
-          <circle class="ring-frame" cx="17" cy="17" r="15.5"/>
+        <svg width="44" height="44" viewBox="0 0 44 44" class="hud-ring-svg">
+          <circle class="ring-frame" cx="22" cy="22" r="20"/>
           <g class="ring-deco-group">
-            <circle class="ring-ticks" cx="17" cy="17" r="14"/>
+            <circle class="ring-ticks" cx="22" cy="22" r="18"/>
           </g>
-          <circle class="timer-track"    cx="17" cy="17" r="10"/>
-          <circle class="timer-progress" cx="17" cy="17" r="10" id="timer-arc"/>
-          <circle class="ring-pulse" cx="17" cy="17" r="2"/>
+          <circle class="timer-track"    cx="22" cy="22" r="13"/>
+          <circle class="timer-progress" cx="22" cy="22" r="13" id="timer-arc"/>
+          <circle class="ring-pulse" cx="22" cy="22" r="2.6"/>
         </svg>
       </div>
       <div class="hud-info">
@@ -74,6 +74,9 @@
 
     <!-- Error dot -->
     <div id="connection" class="connection"></div>
+
+    <!-- Per-scene voice note / music clip — src set and played in showHud() -->
+    <audio id="scene-audio" loop preload="auto"></audio>
 
     <!-- Keyboard navigation guide -->
     <div class="nav-hint">

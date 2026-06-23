@@ -54,6 +54,75 @@
           <span class="char-counter" id="char-counter">0 / 280</span>
         </label>
 
+        <div class="field audio-field">
+          <span class="field-label-row"><span class="field-index">05</span>Add sound (optional) <i class="field-dot" id="dot-audio"></i></span>
+          <p class="audio-hint">Plays for as long as this memory is on screen — clips are capped at 1:00 to match.</p>
+
+          <div id="audio-empty" class="audio-options">
+            <button type="button" id="record-voice-btn" class="audio-option-btn">
+              <span class="audio-icon-wrap"><span class="audio-icon">🎙️</span></span>
+              Record Voice
+            </button>
+            <button type="button" id="browse-music-btn" class="audio-option-btn">
+              <span class="audio-icon-wrap"><span class="audio-icon">🎧</span></span>
+              Browse Music
+            </button>
+            <button type="button" id="upload-audio-btn" class="audio-option-btn">
+              <span class="audio-icon-wrap"><span class="audio-icon">📁</span></span>
+              Upload Audio
+            </button>
+            <input type="file" id="audio-file-input" accept="audio/*" class="visually-hidden" />
+          </div>
+
+          <div id="audio-recording" class="audio-panel hidden">
+            <p class="audio-status-text"><span class="rec-dot"></span> Recording… <span id="record-timer">0:00</span> / 1:00</p>
+            <div class="record-progress-track"><div class="record-progress-fill" id="record-progress-fill"></div></div>
+            <button type="button" id="stop-record-btn" class="audio-option-btn">⏹ Stop</button>
+          </div>
+
+          <div id="audio-preview" class="audio-panel hidden">
+            <audio id="audio-preview-player" controls></audio>
+            <div class="audio-panel-actions">
+              <button type="button" id="remove-audio-btn" class="audio-remove-btn">Remove</button>
+            </div>
+          </div>
+
+          <div id="music-browser" class="audio-panel hidden">
+            <div class="music-search-row">
+              <input type="text" id="music-search-input" placeholder="Search any language — song, mood, artist…" />
+              <button type="button" id="music-search-btn">Search</button>
+            </div>
+            <p class="music-note">Searches free, openly-licensed tracks from around the world — mainstream copyrighted songs won't appear.</p>
+            <div id="music-results" class="music-results"></div>
+            <button type="button" id="close-music-browser-btn" class="audio-remove-btn">Cancel</button>
+          </div>
+
+          <div id="music-crop" class="audio-panel hidden">
+            <p class="audio-status-text" id="crop-track-title"></p>
+            <audio id="crop-player"></audio>
+
+            <div class="waveform-wrap" id="waveform-wrap">
+              <canvas id="waveform-canvas" width="560" height="64"></canvas>
+              <div class="crop-box" id="crop-box">
+                <div class="crop-handle crop-handle-left" id="crop-handle-left"></div>
+                <div class="crop-handle crop-handle-right" id="crop-handle-right"></div>
+              </div>
+              <div class="crop-playhead hidden" id="crop-playhead"></div>
+            </div>
+
+            <p class="crop-range-label">
+              <span id="crop-start-label">0:00</span> – <span id="crop-end-label">0:00</span>
+              &nbsp;·&nbsp;<span id="crop-duration-label">0s</span> / 1:00 max
+            </p>
+
+            <div class="audio-panel-actions">
+              <button type="button" id="preview-crop-btn">▶ Preview</button>
+              <button type="button" id="confirm-crop-btn">Use this clip</button>
+              <button type="button" id="cancel-crop-btn" class="audio-remove-btn">Cancel</button>
+            </div>
+          </div>
+        </div>
+
         <button id="upload-button" type="submit" disabled>Initiate Reconstruction</button>
         <p id="status" class="status" role="status"></p>
       </form>

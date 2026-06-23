@@ -19,13 +19,14 @@ const loaderEl           = document.getElementById("processing-loader");
 const timerArcEl         = document.getElementById("timer-arc");
 const storyOverlayEl     = document.getElementById("story-overlay");
 const overlayStoryTextEl = document.getElementById("overlay-story-text");
+const sceneAudioEl       = document.getElementById("scene-audio");
 
 const DWELL_MS        = 60_000;
 const POLL_INTERVAL   = 4_000;
 const STATUS_INTERVAL = 3_000;
 const OVERLAY_FADE_MS = 480;
 const ERROR_SHOW_MS   = 4_000;
-const TIMER_C         = 62.8;   // 2π × 10
+const TIMER_C         = 81.68;  // 2π × 13
 
 const INIT_POS    = [0, 0, -3];   // must match initialCameraPosition
 const INIT_TARGET = [0, 0, 1];    // must match initialCameraLookAt
@@ -176,6 +177,17 @@ async function showHud(scene, onDwellEnd) {
   captionStoryEl.textContent = "";
   hudEl.classList.remove("hidden");
 
+  // Per-scene voice note / music clip — loops for as long as the memory is
+  // on screen, stopped in hideHud() when the next scene transitions in.
+  sceneAudioEl.pause();
+  if (scene.audio_url) {
+    sceneAudioEl.src = scene.audio_url;
+    sceneAudioEl.currentTime = 0;
+    sceneAudioEl.play().catch(() => { /* blocked until a user gesture — fine, kiosk already has one */ });
+  } else {
+    sceneAudioEl.removeAttribute("src");
+  }
+
   const c1 = typewrite(captionNameEl, (scene.name || "Untitled").toUpperCase(), 55);
   cancelTypewriters.push(c1);
 
@@ -236,6 +248,7 @@ function hideHud() {
   hudEl.classList.add("hidden");
   storyOverlayEl.classList.add("hidden");
   if (storyOverlayTimer) { clearTimeout(storyOverlayTimer); storyOverlayTimer = null; }
+  sceneAudioEl.pause();
 }
 
 // ── Dwell timer ───────────────────────────────────────────────────────────
