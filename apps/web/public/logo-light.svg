@@ -1,26 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 108" width="200" height="108" role="img" aria-label="Memo-Haus">
-  <!-- Orbital gaussian mark — centred. Same geometry as logo.svg, recoloured
-       for a light background (dark navy instead of pale cyan/white). -->
+  <!-- Orbital gaussian mark — same geometry as logo.svg, recoloured for a
+       light background, bold and flat (full-opacity solid strokes). -->
   <g transform="translate(100,32)">
     <ellipse rx="26" ry="11"
-      fill="none" stroke="#0f3764" stroke-opacity="0.30" stroke-width="1.2"
+      fill="none" stroke="#0f3764" stroke-width="1.6"
       transform="rotate(-18)"/>
     <circle r="18"
-      fill="none" stroke="#0f3764" stroke-opacity="0.50" stroke-width="1"/>
-    <line x1="-18" y1="0" x2="-24" y2="0"
-      stroke="#0f3764" stroke-opacity="0.75" stroke-width="1.2"/>
-    <line x1="18" y1="0" x2="24" y2="0"
-      stroke="#0f3764" stroke-opacity="0.75" stroke-width="1.2"/>
-    <circle r="7" fill="#0f3764" fill-opacity="0.10"/>
-    <circle r="3.5" fill="#0f3764" fill-opacity="0.95"/>
-    <circle r="1.4" cx="-0.7" cy="-0.7" fill="white" fill-opacity="0.85"/>
+      fill="none" stroke="#0f3764" stroke-width="1.6"/>
+    <line x1="-18" y1="0" x2="-24" y2="0" stroke="#0f3764" stroke-width="1.8"/>
+    <line x1="18" y1="0" x2="24" y2="0" stroke="#0f3764" stroke-width="1.8"/>
+    <circle r="3.5" fill="#0f3764"/>
+    <circle r="1.4" cx="-0.7" cy="-0.7" fill="#eef1f5"/>
   </g>
 
-  <!-- Wordmark — centred, no divider line -->
-  <g font-family="'Courier New',Courier,monospace" text-anchor="middle">
-    <text x="100" y="74" font-size="24" font-weight="700" letter-spacing="7"
-      fill="#0f3764" fill-opacity="0.90">MEMO</text>
-    <text x="100" y="100" font-size="24" font-weight="700" letter-spacing="7"
-      fill="#08203d" fill-opacity="1">HAUS</text>
+  <!-- Wordmark — bold modern sans, flat fill -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif" text-anchor="middle">
+    <text x="100" y="74" font-size="24" font-weight="800" letter-spacing="6" fill="#0f3764">MEMO</text>
+    <text x="100" y="100" font-size="24" font-weight="800" letter-spacing="6" fill="#08203d">HAUS</text>
   </g>
 </svg>

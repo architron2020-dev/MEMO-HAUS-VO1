@@ -1,7 +1,9 @@
 import "./contribute.css";
-import { initThemeToggle } from "./theme.js";
+import { initThemeToggle, initCursor, initTapSounds } from "./theme.js";
 
 initThemeToggle();
+initCursor();
+initTapSounds();
 
 // ── DOM refs ────────────────────────────────────────────────────────────
 

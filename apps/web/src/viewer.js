@@ -20,13 +20,17 @@ const timerArcEl         = document.getElementById("timer-arc");
 const storyOverlayEl     = document.getElementById("story-overlay");
 const overlayStoryTextEl = document.getElementById("overlay-story-text");
 const sceneAudioEl       = document.getElementById("scene-audio");
+const cursorReticleEl    = document.getElementById("cursor-reticle");
+const navHintTabEl       = document.getElementById("nav-hint-tab");
+const navHintPanelEl     = document.getElementById("nav-hint-panel");
+const navHintCloseEl     = document.getElementById("nav-hint-close");
 
 const DWELL_MS        = 60_000;
 const POLL_INTERVAL   = 4_000;
 const STATUS_INTERVAL = 3_000;
 const OVERLAY_FADE_MS = 480;
 const ERROR_SHOW_MS   = 4_000;
-const TIMER_C         = 81.68;  // 2π × 13
+const TIMER_C         = 100.53; // 2π × 16
 
 const INIT_POS    = [0, 0, -3];   // must match initialCameraPosition
 const INIT_TARGET = [0, 0, 1];    // must match initialCameraLookAt
@@ -57,43 +61,52 @@ function hslToRgb(h, s, l) {
 async function extractSceneColor(imageUrl) {
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    // No crossOrigin attribute — this image is same-origin (served by our
+    // own backend), and setting crossOrigin="anonymous" anyway forces the
+    // browser into CORS mode, which can silently fail to tag the response
+    // as CORS-cleared depending on header quirks and taint the canvas. For
+    // a same-origin image, leaving this off is both correct and simpler.
     img.onload = () => {
-      const SIZE = 80;
-      const canvas = document.createElement("canvas");
-      canvas.width = SIZE; canvas.height = SIZE;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, SIZE, SIZE);
-      const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
+      try {
+        const SIZE = 80;
+        const canvas = document.createElement("canvas");
+        canvas.width = SIZE; canvas.height = SIZE;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, SIZE, SIZE);
+        const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
 
-      let bestS = 0, bestH = 180;
+        let bestS = 0, bestH = 180;
 
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i] / 255, g = data[i+1] / 255, b = data[i+2] / 255;
-        const max = Math.max(r, g, b), min = Math.min(r, g, b);
-        const l = (max + min) / 2;
-        // Skip very dark or blown-out pixels
-        if (l < 0.12 || l > 0.92) continue;
-        const d = max - min;
-        const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
-        if (s > bestS) {
-          bestS = s;
-          let h;
-          if (max === r)      h = ((g - b) / d) % 6;
-          else if (max === g) h = (b - r) / d + 2;
-          else                h = (r - g) / d + 4;
-          bestH = (h * 60 + 360) % 360;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i] / 255, g = data[i+1] / 255, b = data[i+2] / 255;
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          const l = (max + min) / 2;
+          // Skip very dark or blown-out pixels
+          if (l < 0.12 || l > 0.92) continue;
+          const d = max - min;
+          const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+          if (s > bestS) {
+            bestS = s;
+            let h;
+            if (max === r)      h = ((g - b) / d) % 6;
+            else if (max === g) h = (b - r) / d + 2;
+            else                h = (r - g) / d + 4;
+            bestH = (h * 60 + 360) % 360;
+          }
         }
-      }
 
-      if (bestS < 0.14) {
-        // B&W or very desaturated — bright cyan is most visible on dark bg
+        if (bestS < 0.14) {
+          // B&W or very desaturated — bright cyan is most visible on dark bg
+          resolve([100, 200, 255]);
+          return;
+        }
+
+        // Lock saturation high, set L to 0.70 for max screen visibility
+        resolve(hslToRgb(bestH / 360, Math.min(bestS * 1.3, 1), 0.70));
+      } catch (err) {
+        console.error("Colour extraction failed:", err);
         resolve([100, 200, 255]);
-        return;
       }
-
-      // Lock saturation high, set L to 0.70 for max screen visibility
-      resolve(hslToRgb(bestH / 360, Math.min(bestS * 1.3, 1), 0.70));
     };
     img.onerror = () => resolve([100, 200, 255]);
     img.src = imageUrl;
@@ -104,10 +117,21 @@ function applyHudColor([r, g, b]) {
   const val = `${r}, ${g}, ${b}`;
   hudEl.style.setProperty("--hc", val);
   storyOverlayEl.style.setProperty("--hc", val);
-  // Set on root too so elements outside the HUD (e.g. the nav hint) inherit it
+  // Set on root too so elements outside the HUD (e.g. the nav hint and the
+  // custom cursor, which is styled with rgb(var(--hc))) inherit it
   document.documentElement.style.setProperty("--hc", val);
-  // Update the SVG arc glow filter inline (CSS filter can't use rgba vars)
-  timerArcEl.style.filter = `drop-shadow(0 0 4px rgba(${r},${g},${b},0.65))`;
+  // Tab icon matches the same colour as the cursor/HUD — same source, so
+  // they're never out of sync with each other.
+  setFaviconColor(r, g, b);
+}
+
+function setFaviconColor(r, g, b) {
+  const iconLink = document.querySelector('link[rel="icon"]');
+  if (!iconLink) return;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">`
+    + `<circle cx="16" cy="16" r="15" fill="rgb(${r},${g},${b})"/>`
+    + `<circle cx="16" cy="16" r="5" fill="#06080c"/></svg>`;
+  iconLink.href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 // ── Typewriter ────────────────────────────────────────────────────────────
@@ -453,9 +477,21 @@ async function transitionTo(scene) {
   await overlayTo(1);
 
   if (oldCount > 0 && viewer) {
-    await viewer.removeSplatScenes(
-      Array.from({ length: oldCount }, (_, i) => i), false
-    );
+    // Backstop on top of goToIndex's own exclusivity lock: the library's
+    // internal "is loading" flag can apparently take a beat longer to clear
+    // than the promise it returns suggests, so a couple of short retries
+    // here absorbs that instead of failing the whole transition.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await viewer.removeSplatScenes(
+          Array.from({ length: oldCount }, (_, i) => i), false
+        );
+        break;
+      } catch (err) {
+        if (attempt === 2) throw err;
+        await new Promise(r => setTimeout(r, 150));
+      }
+    }
   }
   placeholderEl.classList.add("hidden");
   ensureViewer();
@@ -494,6 +530,19 @@ function goToIndex(index) {
     stopDwell();
     try {
       const loadPromise = await transitionTo(scene);
+      // Must actually wait for the splat to finish loading here, inside the
+      // exclusive lock — addSplatScene()/removeSplatScenes() throw if called
+      // again while a previous one is still in flight. Releasing the lock
+      // before this settles (the old behaviour) let the next goToIndex call
+      // collide mid-load, which is exactly what was producing "wrong scene,
+      // audio doesn't match, jumps around fast".
+      if (loadPromise) {
+        try {
+          await loadPromise;
+        } catch (err) {
+          console.error("Splat load failed for", scene.id, err);
+        }
+      }
       activeSceneId = scene.id;
       const advance = () => {
         if (scenes.length < 2) {
@@ -503,11 +552,7 @@ function goToIndex(index) {
           goToIndex((currentIndex + 1) % scenes.length);
         }
       };
-      if (loadPromise) {
-        loadPromise.then(() => showHud(scene, advance)).catch(() => showHud(scene, advance));
-      } else {
-        showHud(scene, advance);
-      }
+      showHud(scene, advance);
     } catch (err) {
       console.error("Transition failed:", err);
     }
@@ -584,10 +629,18 @@ function isFullscreen() {
   return !!document.fullscreenElement;
 }
 
+let _fullscreenRequested = false;
+
 function enterFullscreen() {
-  if (!isFullscreen() && document.documentElement.requestFullscreen) {
-    document.documentElement.requestFullscreen().catch(() => {});
-  }
+  // Guards against the document-level pointerdown listener and the splash
+  // Start button both firing for the same physical click — a second
+  // requestFullscreen() call before the first one resolves logs a harmless
+  // but noisy "can only be initiated by a user gesture" warning.
+  if (_fullscreenRequested || isFullscreen() || !document.documentElement.requestFullscreen) return;
+  _fullscreenRequested = true;
+  document.documentElement.requestFullscreen()
+    .catch(() => {})
+    .finally(() => { _fullscreenRequested = false; });
 }
 
 function toggleFullscreen() {
@@ -602,6 +655,16 @@ function toggleFullscreen() {
 // tap/click/keypress on the kiosk and use it to go fullscreen automatically.
 document.addEventListener("pointerdown", enterFullscreen, { once: true });
 document.addEventListener("keydown", enterFullscreen, { once: true });
+
+// The intro splash's Start button is the explicit version of that same
+// gesture — also dismisses the placeholder immediately rather than waiting
+// for a scene to load, in case scenes are already loaded and it just never
+// got hidden (or there simply aren't any yet).
+const splashStartBtn = document.getElementById("splash-start-btn");
+splashStartBtn?.addEventListener("click", () => {
+  enterFullscreen();
+  placeholderEl.classList.add("hidden");
+});
 
 // Manual toggle for testing/operator use
 document.addEventListener("keydown", e => {
@@ -668,9 +731,53 @@ function flyLoop() {
 
 flyLoop();
 
+// ── Keyboard nav hint: small tab, expands/closes on click ─────────────────
+
+navHintTabEl.addEventListener("click", () => navHintPanelEl.classList.toggle("hidden"));
+navHintCloseEl.addEventListener("click", () => navHintPanelEl.classList.add("hidden"));
+
+// ── Custom cursor ─────────────────────────────────────────────────────────
+// The native cursor is hidden globally (kiosk look) — this reticle div takes
+// its place, positioned directly from clientX/clientY on every move, so it's
+// always obvious exactly where a click will land.
+
+document.addEventListener("pointermove", e => {
+  cursorReticleEl.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+  const overClickable = e.target.closest("button, a, [role='button']");
+  cursorReticleEl.classList.toggle("hoverable", !!overClickable);
+});
+
+document.addEventListener("pointerdown", e => {
+  cursorReticleEl.classList.add("pressed");
+  spawnClickPing(e.clientX, e.clientY);
+});
+document.addEventListener("pointerup", () => cursorReticleEl.classList.remove("pressed"));
+
+function spawnClickPing(x, y) {
+  const ping = document.createElement("div");
+  ping.className = "click-ping";
+  ping.style.left = `${x}px`;
+  ping.style.top  = `${y}px`;
+  document.body.appendChild(ping);
+  ping.addEventListener("animationend", () => ping.remove());
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────
 
 poll();
-setInterval(poll, POLL_INTERVAL);
-setInterval(pollStatus, STATUS_INTERVAL);
-setInterval(pollSelection, 2_000);  // snappier than POLL_INTERVAL — this is a direct user action
+const _pollId      = setInterval(poll, POLL_INTERVAL);
+const _statusId    = setInterval(pollStatus, STATUS_INTERVAL);
+const _selectionId = setInterval(pollSelection, 2_000);  // snappier than POLL_INTERVAL — this is a direct user action
+
+// A dev-server hot-reload of this module without a full page reload would
+// otherwise leave the old poll/select/status intervals running alongside
+// the new ones — multiple overlapping goToIndex() calls racing each other
+// is exactly what produces "wrong scene plays, audio doesn't match, jumps
+// around fast". Clearing them on dispose guarantees only one set ever runs.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    clearInterval(_pollId);
+    clearInterval(_statusId);
+    clearInterval(_selectionId);
+  });
+}

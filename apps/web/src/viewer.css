@@ -1,27 +1,47 @@
 :root {
   color-scheme: dark;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
 
-  /* Default cyan before any scene's colour has been extracted — every
-     element that doesn't declare its own --hc (e.g. .nav-hint) inherits
-     this until applyHudColor() overwrites it per-scene. */
-  --hc: 100, 200, 255;
+  /* --accent-pick is set by the inline script in <head>, same random-on-
+     every-load palette as the mobile pages (or carried over via ?accent=
+     when opened from one of their "Live Viewer" links). This is only the
+     STARTING colour, before any scene's own colour has been extracted —
+     applyHudColor() overwrites --hc per-scene once a memory is showing,
+     same as before. Theme switching never touches this value directly —
+     it only changes --op-boost and the page chrome. */
+  --hc: var(--accent-pick, 100, 200, 255);
 
   /* Amber is reserved for exactly one meaning across the whole app:
      "the system is actively generating something right now." */
   --accent-active: 232, 163, 61;
+
+  /* No light mode here — the canvas backdrop has to stay black for splats
+     to render correctly (see #viewer below), so a light theme would only
+     ever cover the chrome, not the thing you're actually looking at most
+     of the time. Kept as plain values instead of theme-conditional vars. */
+  --op-boost: 1;
+  --page-bg: #000;
+  --chrome-bg: rgba(8, 8, 12, 0.65);
+  --text-base: 255, 255, 255; /* generic page text — not the scene-identity colour */
+  --vignette-opacity: 1;
 }
 
 html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #000;
-  color: #f1f1f1;
+  background: var(--page-bg);
+  color: rgb(var(--text-base));
   cursor: none;
 }
 
 /* ── Gaussian viewer ─────────────────────────────────────────────────────── */
+/* Always pure black, regardless of theme — this is a rendering requirement,
+   not a style choice. Splats are authored assuming a black backdrop for
+   their alpha/depth blending; on any other colour the actual splat content
+   (often mostly "empty space" pixels) renders as invisible/blended into the
+   background instead of as the photo it's supposed to be. Only the chrome
+   around the canvas (placeholder, vignette) follows the theme. */
 
 #viewer {
   position: fixed;
@@ -46,6 +66,10 @@ html, body {
     rgba(0, 0, 0, 0.45) 75%,
     rgba(0, 0, 0, 0.85) 100%
   );
+  /* Only makes sense as a cinematic edge-darken against a black backdrop —
+     in light mode it just reads as a stray grey cloud, so it's switched
+     off entirely there instead of re-tinted. */
+  opacity: var(--vignette-opacity, 1);
 }
 
 /* ── Transition overlay ──────────────────────────────────────────────────── */
@@ -91,14 +115,16 @@ html, body {
 .placeholder-sub {
   margin: 0 0 12px;
   font-size: clamp(0.95rem, 1.8vw, 1.15rem);
-  color: rgba(255, 255, 255, 0.55);
+  font-weight: 700;
+  color: rgba(var(--text-base), calc(0.55 * var(--op-boost)));
   letter-spacing: 0.06em;
 }
 
 .placeholder-hint {
   margin: 0;
   font-size: clamp(0.8rem, 1.4vw, 0.95rem);
-  color: rgba(255, 255, 255, 0.28);
+  font-weight: 600;
+  color: rgba(var(--text-base), calc(0.45 * var(--op-boost)));
   letter-spacing: 0.03em;
 }
 
@@ -125,12 +151,12 @@ html, body {
 
 #story-overlay p {
   margin: 0;
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   line-height: 1.75;
-  color: rgba(var(--hc), 0.92);
+  color: rgba(var(--hc), calc(0.92 * var(--op-boost)));
   text-shadow:
     0 0 24px rgba(0, 0, 0, 0.95),
     0 2px 10px rgba(0, 0, 0, 0.90),
@@ -169,52 +195,34 @@ html, body {
 
 .hud-ring-svg { display: block; }
 
-.ring-frame {
-  fill: none;
-  stroke: rgba(var(--hc), 0.10);
-  stroke-width: 1;
-}
-
-.ring-deco-group {
-  transform-origin: 22px 22px;
-  animation: ring-rotate 9s linear infinite;
-}
-
-.ring-ticks {
-  fill: none;
-  stroke: rgba(var(--hc), 0.32);
-  stroke-width: 1;
-  stroke-dasharray: 2.2 7;
-}
-
-@keyframes ring-rotate {
-  to { transform: rotate(360deg); }
-}
-
+/* Simple, bold, flat — same language as the logo/cursor: a solid track, a
+   solid colour progress arc, a solid centre dot. No decorative rotating
+   tick ring, no glow. The countdown itself sweeping around is the
+   "interesting" part — it doesn't need ornamentation on top of it. */
 .ring-pulse {
-  fill: rgba(var(--hc), 0.92);
+  fill: rgb(var(--hc));
   transform-origin: 22px 22px;
   animation: ring-pulse 1.8s ease-in-out infinite;
 }
 
 @keyframes ring-pulse {
   0%, 100% { opacity: 1;    transform: scale(1);    }
-  50%       { opacity: 0.32; transform: scale(0.55); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
 }
 
 .timer-track {
   fill: none;
-  stroke: rgba(var(--hc), 0.14);
-  stroke-width: 1.5;
+  stroke: rgba(var(--hc), calc(0.18 * var(--op-boost)));
+  stroke-width: 3;
 }
 
 .timer-progress {
   fill: none;
-  stroke: rgba(var(--hc), 0.82);
-  stroke-width: 1.5;
+  stroke: rgb(var(--hc));
+  stroke-width: 3;
   stroke-linecap: round;
-  stroke-dasharray: 81.68;
-  stroke-dashoffset: 81.68;
+  stroke-dasharray: 100.53;
+  stroke-dashoffset: 100.53;
   transform: rotate(-90deg);
   transform-origin: 22px 22px;
 }
@@ -224,7 +232,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-family: "Courier New", "Courier", monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
 }
 
 .hud-status:empty {
@@ -233,18 +241,19 @@ html, body {
 
 .hud-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 16px;
 }
 
 .hud-label {
-  font-size: 0.70rem;
+  font-size: 1.05rem;
   font-weight: 800;
-  letter-spacing: 0.16em;
-  color: rgba(var(--hc), 0.55);
-  min-width: 42px;
+  letter-spacing: 0.10em;
+  color: rgba(var(--hc), calc(0.55 * var(--op-boost)));
+  min-width: 64px;
+  flex-shrink: 0;
   text-transform: uppercase;
-  line-height: 1.5;
+  line-height: 1;
 }
 
 /* Every HUD value (name/author/year/era/story) shares one font size —
@@ -253,20 +262,20 @@ html, body {
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: 0.10em;
-  color: rgba(var(--hc), 1);
+  color: rgba(var(--hc), calc(1 * var(--op-boost)));
   text-transform: uppercase;
-  line-height: 1.5;
+  line-height: 1;
 }
 
 /* author row slightly dimmer */
 #author-row .hud-value {
   font-weight: 700;
-  color: rgba(var(--hc), 0.72);
+  color: rgba(var(--hc), calc(0.72 * var(--op-boost)));
 }
 
 /* year row */
 #year-row .hud-value {
-  color: rgba(var(--hc), 0.88);
+  color: rgba(var(--hc), calc(0.88 * var(--op-boost)));
   letter-spacing: 0.14em;
 }
 
@@ -276,24 +285,25 @@ html, body {
   margin-top: 4px;
 }
 
-#story-row .hud-label {
-  margin-top: 2px;
-}
 
 .hud-story {
   font-weight: 700;
-  color: rgba(var(--hc), 0.78);
+  color: rgba(var(--hc), calc(0.78 * var(--op-boost)));
   text-transform: none;
   letter-spacing: 0.04em;
   max-width: 320px;
   line-height: 1.65;
+  /* The taller line-height (needed so wrapped lines have breathing room)
+     pads extra space above the first line too, pushing it down relative
+     to the MEMO label — this pulls just the first line back up level. */
+  margin-top: -0.2em;
 }
 
 /* blinking cursor appended during typewriter */
 .hud-cursor {
   display: inline-block;
   animation: hud-blink 0.9s step-end infinite;
-  color: rgba(var(--hc), 0.85);
+  color: rgba(var(--hc), calc(0.85 * var(--op-boost)));
 }
 
 @keyframes hud-blink {
@@ -301,52 +311,105 @@ html, body {
   50%       { opacity: 0; }
 }
 
-/* ── Keyboard nav hint (bottom-right, always visible, very subtle) ──────── */
+/* ── Keyboard nav hint (bottom-right) — small closable tab, not a full bar ── */
+/* No local --hc on these on purpose — they inherit the adaptive value set
+   on :root by applyHudColor(), the same one driving the HUD's colour. */
 
-.nav-hint {
-  /* No local --hc here on purpose — it must inherit the adaptive value set
-     on :root by applyHudColor(), the same one driving the HUD's colour. */
+.nav-hint-tab {
   position: fixed;
   bottom: 20px;
   right: 36px;
   z-index: 29;
-  font-family: "Courier New", Courier, monospace;
-  font-size: 0.88rem;
-  font-weight: 800;
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-  color: rgba(var(--hc), 0.62);
-  text-shadow: 0 0 10px rgba(var(--hc), 0.30);
-  pointer-events: none;
-  line-height: 1.6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--hc), calc(0.35 * var(--op-boost)));
+  background: var(--chrome-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(var(--hc), calc(0.95 * var(--op-boost)));
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-.nav-hint .nk {
-  color: rgba(var(--hc), 1);
-  font-weight: 900;
-  text-shadow: 0 0 8px rgba(var(--hc), 0.65);
+.nav-hint-tab:hover {
+  background: rgba(var(--hc), calc(0.14 * var(--op-boost)));
+  border-color: rgba(var(--hc), calc(0.6 * var(--op-boost)));
 }
+
+.nav-hint-panel {
+  position: fixed;
+  bottom: 54px;
+  right: 36px;
+  z-index: 29;
+  padding: 12px 30px 12px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(var(--hc), calc(0.30 * var(--op-boost)));
+  background: var(--chrome-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(var(--hc), calc(0.62 * var(--op-boost)));
+  line-height: 1.9;
+}
+
+.nav-hint-panel.hidden { display: none; }
+
+.nav-hint-row { white-space: nowrap; }
+
+.nav-hint-panel .nk {
+  color: rgba(var(--hc), calc(1 * var(--op-boost)));
+  font-weight: 900;
+}
+
+.nav-hint-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: rgba(var(--hc), calc(0.65 * var(--op-boost)));
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nav-hint-close:hover { color: rgba(var(--hc), calc(1 * var(--op-boost))); }
 
 /* ── Processing pill (bottom-right) ──────────────────────────────────────── */
 
 .processing-loader {
   position: fixed;
-  bottom: 36px;
-  right: 36px;
+  top: 20px;
+  left: 20px;
   z-index: 30;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: rgba(8, 8, 12, 0.72);
+  background: var(--chrome-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(var(--accent-active), 0.30);
+  border: 1px solid rgba(var(--hc), calc(0.30 * var(--op-boost)));
   border-radius: 999px;
-  font-family: "Courier New", "Courier", monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.68rem;
   letter-spacing: 0.10em;
-  color: rgba(var(--accent-active), 0.75);
+  color: rgba(var(--hc), calc(0.75 * var(--op-boost)));
   pointer-events: none;
   opacity: 1;
   transition: opacity 0.6s ease;
@@ -358,8 +421,7 @@ html, body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: rgba(var(--accent-active), 0.9);
-  box-shadow: 0 0 6px rgba(var(--accent-active), 0.7);
+  background: rgba(var(--hc), calc(0.9 * var(--op-boost)));
   animation: pulse 1.6s ease-in-out infinite;
   flex-shrink: 0;
 }
@@ -367,6 +429,78 @@ html, body {
 @keyframes pulse {
   0%, 100% { opacity: 1;   transform: scale(1);   }
   50%       { opacity: 0.3; transform: scale(0.6); }
+}
+
+/* ── Custom reticle cursor ────────────────────────────────────────────────── */
+/* Native cursor stays hidden (cursor:none on html/body, kiosk look) — this
+   div is positioned by JS on every pointermove instead, so there's always a
+   clear, on-theme indicator of exactly where a click will land. */
+
+.cursor-reticle {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  will-change: transform;
+}
+
+/* Flat 2D mark — same filled-circle + contrasting centre dot as the
+   tab favicon/logo, just smaller. No glow, no outline-only ring. */
+.cursor-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  background: rgb(var(--hc));
+  border-radius: 50%;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.cursor-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--page-bg);
+}
+
+/* Shrinks on press, expands over anything clickable — same "targeting"
+   feedback language as a HUD reticle locking onto something. */
+.cursor-reticle.pressed .cursor-ring {
+  transform: scale(0.65);
+}
+
+.cursor-reticle.hoverable .cursor-ring {
+  transform: scale(1.35);
+  background: rgb(var(--accent-active));
+}
+
+/* Brief expanding ring left behind at the exact point of every click —
+   visible confirmation that the click actually registered, and where. */
+.click-ping {
+  position: fixed;
+  z-index: 99;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 2px solid rgb(var(--hc));
+  border-radius: 50%;
+  pointer-events: none;
+  animation: click-ping-anim 500ms ease-out forwards;
+}
+
+@keyframes click-ping-anim {
+  from { width: 10px;  height: 10px;  margin: -5px 0 0 -5px;  opacity: 0.9; }
+  to   { width: 50px;  height: 50px;  margin: -25px 0 0 -25px; opacity: 0; }
 }
 
 /* ── Connection error dot ────────────────────────────────────────────────── */
@@ -387,7 +521,6 @@ html, body {
 
 .connection[data-state="error"] {
   background: rgba(255, 80, 80, 0.85);
-  box-shadow: 0 0 8px rgba(255, 60, 60, 0.5);
   opacity: 1;
   animation: error-pulse 2s ease-in-out infinite;
 }
@@ -396,3 +529,34 @@ html, body {
   0%, 100% { opacity: 1;   }
   50%       { opacity: 0.3; }
 }
+
+/* ── Intro splash button + orbit-spin, inside the existing #placeholder ── */
+
+.splash-orbit {
+  transform-origin: 0 0;
+  animation: splash-orbit-spin 6s linear infinite;
+}
+
+@keyframes splash-orbit-spin {
+  to { transform: rotate(360deg); }
+}
+
+.splash-start-btn {
+  margin-top: 18px;
+  padding: 14px 38px;
+  border: none;
+  border-radius: 999px;
+  background: rgb(var(--hc));
+  color: var(--page-bg);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.15s ease, opacity 0.2s ease;
+}
+
+.splash-start-btn:hover { transform: scale(1.04); }
+.splash-start-btn:active { transform: scale(0.97); }

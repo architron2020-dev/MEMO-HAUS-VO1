@@ -1,7 +1,11 @@
 import "./upload.css";
-import { initThemeToggle } from "./theme.js";
+import { initThemeToggle, carryAccentToViewerLinks, initCursor, initSplash, initTapSounds } from "./theme.js";
 
 initThemeToggle();
+carryAccentToViewerLinks();
+initCursor();
+initSplash();
+initTapSounds();
 
 const form = document.getElementById("upload-form");
 const fileInput = document.getElementById("file-input");
@@ -369,14 +373,20 @@ uploadAudioBtn.addEventListener("click", () => {
 audioFileInput.addEventListener("change", () => {
   const file = audioFileInput.files?.[0];
   if (!file) return;
-  openCropUI(URL.createObjectURL(file), file.name);
+  openCropUI(URL.createObjectURL(file), file.name, file);
 });
 
 // --- Crop UI: real waveform with a draggable selection box ────────────────
 
-async function openCropUI(sourceUrl, title) {
+// `rawFile` is only set for direct file uploads — if the browser can't
+// decode it for cropping (some codecs/containers just aren't supported by
+// the Web Audio API), this is the fallback so the upload isn't a dead end:
+// use the original file exactly as picked, no waveform/crop, instead of
+// just failing outright.
+async function openCropUI(sourceUrl, title, rawFile = null) {
   showAudioPanel(musicCropEl);
   cropTrackTitleEl.textContent = title;
+  previewCropBtn.textContent = "▶ Preview";
 
   try {
     const res = await fetch(sourceUrl);
@@ -386,8 +396,18 @@ async function openCropUI(sourceUrl, title) {
     audioCtx.close();
   } catch (err) {
     console.error(err);
-    setStatus(`Could not load that audio: ${err.message}`, "error");
-    resetAudioUI();
+    if (rawFile) {
+      setSelectedAudio(rawFile);
+      audioPreviewPlayer.src = sourceUrl;
+      showAudioPanel(audioPreviewEl);
+      setStatus(
+        `Could not show a waveform for "${title}" (unsupported for cropping), but it's attached as-is — uncropped.`,
+        "pending",
+      );
+    } else {
+      setStatus(`Could not load that audio: ${err.message}`, "error");
+      resetAudioUI();
+    }
     return;
   }
 
@@ -411,8 +431,13 @@ function drawWaveform(buffer) {
   const mid = height / 2;
   ctx.clearRect(0, 0, width, height);
 
-  const hc = getComputedStyle(document.documentElement).getPropertyValue("--hc").trim() || "100, 200, 255";
-  ctx.fillStyle = `rgba(${hc}, 0.55)`;
+  // The waveform "scope" stays dark in both themes (like an instrument
+  // readout), but --hc flips to near-black in light mode for page text —
+  // using it here would make the bars invisible against the dark scope.
+  // --accent-pick is the vivid colour regardless of theme, so it stays
+  // visible against the dark backdrop either way.
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent-pick").trim() || "100, 200, 255";
+  ctx.fillStyle = `rgba(${accent}, 0.85)`;
 
   const data = buffer.getChannelData(0);
   const samplesPerPixel = Math.max(1, Math.floor(data.length / width));
@@ -461,8 +486,12 @@ function wireDrag(handleEl, mode) {
     const grabStartSec = secFromClientX(e.clientX);
     const boxStartAtGrab = cropStartSec;
     const boxEndAtGrab = cropEndSec;
+    let dragDist = 0;
+    let lastClientX = e.clientX;
 
     const onMove = (ev) => {
+      dragDist += Math.abs(ev.clientX - lastClientX);
+      lastClientX = ev.clientX;
       if (mode === "left") {
         let t = secFromClientX(ev.clientX);
         t = Math.max(0, Math.min(t, cropEndSec - 0.2));
@@ -487,6 +516,14 @@ function wireDrag(handleEl, mode) {
       handleEl.releasePointerCapture(e.pointerId);
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", onUp);
+      // A plain click on the box (not an actual drag) — e.g. when the box
+      // covers most/all of a short track — seeks and plays from that point
+      // instead of just "moving" a selection that barely budged.
+      if (mode === "move" && dragDist < 4) {
+        scrubTo(e.clientX);
+        cropPlayer.play().catch(() => {});
+        trackPlayhead(null);
+      }
     };
     document.addEventListener("pointermove", onMove);
     document.addEventListener("pointerup", onUp);
@@ -502,13 +539,15 @@ function positionPlayhead(sec) {
 }
 
 // Keeps the playhead in sync with playback. `stopAtSec` set => stops there
-// (used by the Preview button); null => plays freely to the track's end
-// (used by scrubbing, so people can audition anywhere, not just the crop window).
+// (the Preview button, which only ever plays the cropped start–end range);
+// null => plays freely (free-roam scrubbing, for exploring the whole track
+// to decide where the crop should go).
 function trackPlayhead(stopAtSec) {
   cancelAnimationFrame(previewRaf);
   const tick = () => {
     if (cropPlayer.paused || (stopAtSec != null && cropPlayer.currentTime >= stopAtSec)) {
       if (stopAtSec != null && cropPlayer.currentTime >= stopAtSec) cropPlayer.pause();
+      syncPlayButton();
       return;
     }
     positionPlayhead(cropPlayer.currentTime);
@@ -517,16 +556,30 @@ function trackPlayhead(stopAtSec) {
   previewRaf = requestAnimationFrame(tick);
 }
 
+function syncPlayButton() {
+  previewCropBtn.textContent = cropPlayer.paused ? "▶ Preview" : "⏸ Pause";
+}
+cropPlayer.addEventListener("pause", syncPlayButton);
+cropPlayer.addEventListener("play", syncPlayButton);
+
+// Play/Pause toggle — strictly the cropped start–end range, never the rest
+// of the track, regardless of where free-roam scrubbing last left the
+// playhead.
 previewCropBtn.addEventListener("click", () => {
+  if (!cropPlayer.paused) {
+    cropPlayer.pause();
+    return;
+  }
   cropPlayer.currentTime = cropStartSec;
-  cropPlayer.play().catch(() => {});
   positionPlayhead(cropStartSec);
+  cropPlayer.play().catch(() => {});
   trackPlayhead(cropEndSec);
 });
 
 // Click or drag anywhere on the waveform (outside the crop box itself, which
 // has its own drag-to-move handler) to scrub the playhead and preview from
-// wherever you like — not limited to the current crop window.
+// wherever you like — not limited to the current crop window, so you can
+// explore the whole track to decide where the crop should go.
 function scrubTo(clientX) {
   const t = secFromClientX(clientX);
   cropPlayer.currentTime = t;

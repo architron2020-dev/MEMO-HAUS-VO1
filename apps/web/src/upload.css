@@ -1,6 +1,11 @@
 :root {
   color-scheme: dark;
-  --hc: 100, 200, 255;         /* primary identity / data colour */
+  /* --accent-pick is set by an inline script in <head>, picked fresh — not
+     persisted — on every single page load, so reopening the app/a new tab
+     lands on a different colour each time. One colour combo, always paired
+     with black + white as the fixed frame (see data-theme="light" below for
+     the other half of that pairing). Falls back to cyan if JS hasn't run yet. */
+  --hc: var(--accent-pick, 100, 200, 255);
   --accent-active: 232, 163, 61; /* amber — reserved for "operation in progress" only */
   /* Most text/border opacities here were tuned for blending toward a BLACK
      background (low alpha stays legible). On a light background the same
@@ -9,28 +14,43 @@
   --op-boost: 1;
   --page-bg: #000;
   --card-bg: rgba(4, 5, 8, 0.88);
-  --card-shadow: 0 0 40px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(var(--hc), calc(0.05 * var(--op-boost)));
+  --card-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
   --overlay-bg: rgba(0, 0, 0, 0.92);
   --input-bg: rgba(0, 0, 0, 0.4);
   --pill-bg: rgba(4, 5, 8, 0.85);
-  font-family: "Courier New", Courier, monospace;
+  /* Decorative background grid — its own opacity, independent of --op-boost
+     (that one's tuned for text legibility, not for how strong a texture
+     should be). Coloured by the picked accent on black; in light mode it
+     switches to near-black lines on the coloured page instead. */
+  --grid-rgb: var(--accent-pick, 100, 200, 255);
+  --grid-opacity: 0.14;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
 }
 
-/* Light mode — same sci-fi structure, daylight-readable palette. Nearly
-   every text/border colour in this stylesheet derives from --hc / --accent-
-   active, so re-tinting those two plus the few literal black/white panel
-   backgrounds re-skins the whole page without touching individual rules. */
+/* Light mode flips which half of the pairing is solid: background becomes
+   the picked colour, text becomes near-black — same --hc-driven rules
+   throughout the stylesheet, just pointed at black instead of the accent. */
 :root[data-theme="light"] {
   color-scheme: light;
-  --hc: 15, 55, 100;             /* deep navy — same role, readable on light bg */
-  --accent-active: 168, 100, 10; /* darker amber — keeps contrast on light bg */
-  --op-boost: 1.8;
-  --page-bg: #eef1f5;
-  --card-bg: rgba(255, 255, 255, 0.90);
-  --card-shadow: 0 0 30px rgba(20, 40, 70, 0.12), 0 0 0 1px rgba(var(--hc), calc(0.08 * var(--op-boost)));
-  --overlay-bg: rgba(255, 255, 255, 0.92);
-  --input-bg: rgba(var(--hc), calc(0.05 * var(--op-boost)));
-  --pill-bg: rgba(255, 255, 255, 0.85);
+  --hc: 15, 15, 17;              /* near-black — this is the page's TEXT colour now */
+  --accent-active: 168, 100, 10; /* darker amber — keeps contrast on a coloured bg */
+  /* Boosted hard: text here sits on a saturated colour, not a pale neutral,
+     so low-opacity "secondary" text needs to land much closer to solid
+     black to stay legible — anything lower reads as washed-out grey. */
+  --op-boost: 2.2;
+  /* The card fills almost the whole screen on mobile, so the colour needs to
+     live ON the card itself, not just the sliver of page visible around it —
+     both page and card use the same soft (white-mixed) tone of the picked
+     accent, while inputs/pills stay a cleaner, more opaque white so there's
+     still a clear "surface" to read text and tap targets against. */
+  --page-bg: rgb(var(--accent-pick-soft, 234, 241, 245));
+  --card-bg: rgba(var(--accent-pick-soft, 255, 255, 255), 0.92);
+  --card-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+  --overlay-bg: rgba(var(--accent-pick-soft, 255, 255, 255), 0.94);
+  --input-bg: rgba(255, 255, 255, 0.75);
+  --pill-bg: rgba(255, 255, 255, 0.88);
+  --grid-rgb: 0, 0, 0;
+  --grid-opacity: 0.05;
 }
 
 * { box-sizing: border-box; }
@@ -46,32 +66,56 @@
   background: var(--page-bg);
 }
 
-/* Theme toggle — top-right, same floating-pill language as .page-back */
-.theme-toggle {
+/* Theme switch — top-right, a real sliding toggle instead of an emoji
+   button. Same height as the back button's circle (28px) for visual
+   parity, and the track is a solid fill (not translucent) like the back
+   button, just like it in both dark and light mode. */
+.theme-switch {
   position: fixed;
   top: 16px;
   right: 16px;
   z-index: 10;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(var(--hc), calc(0.25 * var(--op-boost)));
-  border-radius: 999px;
-  background: rgba(var(--hc), calc(0.06 * var(--op-boost)));
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: rgba(var(--hc), calc(0.85 * var(--op-boost)));
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  display: inline-block;
+  width: 38px;
+  height: 21px;
 }
 
-.theme-toggle:hover {
-  background: rgba(var(--hc), calc(0.14 * var(--op-boost)));
-  border-color: rgba(var(--hc), calc(0.55 * var(--op-boost)));
+.theme-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.theme-switch-track {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border: none;
+  border-radius: 999px;
+  background: rgb(var(--hc));
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.theme-switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 2.5px;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.theme-switch input:checked ~ .theme-switch-track .theme-switch-knob {
+  transform: translateX(17px);
+}
+
+.theme-switch input:checked ~ .theme-switch-track {
+  background: rgb(var(--accent-active));
 }
 
 /* Faint technical grid — texture, not glow */
@@ -82,8 +126,8 @@
   width: 200%;
   height: 200%;
   background-image:
-    linear-gradient(rgba(var(--hc), calc(0.04 * var(--op-boost))) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(var(--hc), calc(0.04 * var(--op-boost))) 1px, transparent 1px);
+    linear-gradient(rgba(var(--grid-rgb), var(--grid-opacity)) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--grid-rgb), var(--grid-opacity)) 1px, transparent 1px);
   background-size: 42px 42px;
   pointer-events: none;
   z-index: 0;
@@ -95,34 +139,34 @@
   to   { transform: translate(42px, 42px); }
 }
 
-/* Floating page-back button — secondary pages only (contribute, memories) */
+/* Floating page-back button — secondary pages only (contribute, memories).
+   Solid filled circle, just the arrow — no label text. */
 .page-back {
   position: fixed;
   top: 16px;
   left: 16px;
   z-index: 10;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid rgba(var(--hc), calc(0.25 * var(--op-boost)));
-  border-radius: 999px;
-  background: var(--pill-bg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: rgba(var(--hc), calc(0.80 * var(--op-boost)));
-  font-family: "Courier New", Courier, monospace;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgb(var(--hc));
+  color: var(--page-bg);
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.15s ease, opacity 0.2s ease;
+}
+
+.page-back svg {
+  display: block;
 }
 
 .page-back:hover {
-  background: rgba(var(--hc), calc(0.10 * var(--op-boost)));
-  border-color: rgba(var(--hc), calc(0.55 * var(--op-boost)));
+  transform: scale(1.08);
+  opacity: 0.88;
 }
 
 .upload-card {
@@ -164,45 +208,37 @@
 
 .gen-stage {
   position: relative;
-  width: 110px;
-  height: 110px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.gen-ring {
-  position: absolute;
-  inset: 0;
-  border: 1px solid rgba(var(--hc), calc(0.45 * var(--op-boost)));
+/* Same flat language as the cursor — filled circle, contrasting dot, no
+   rings/glow. The dot sweeping around as the whole circle spins reads as
+   "in progress" without any extra ornamentation. */
+.gen-mark-simple {
+  position: relative;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  opacity: 0;
-  animation: gen-radiate 2.4s ease-out infinite;
+  background: rgb(var(--hc));
+  animation: gen-spin-simple 1.4s linear infinite;
 }
 
-.gen-ring.r2 { animation-delay: 0.8s; }
-.gen-ring.r3 { animation-delay: 1.6s; }
-
-@keyframes gen-radiate {
-  0%   { transform: scale(0.25); opacity: 0.9; }
-  100% { transform: scale(1.4);  opacity: 0;   }
-}
-
-.gen-mark {
+.gen-dot {
   position: absolute;
-  top: 50%;
+  top: 6px;
   left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 1;
-  filter: drop-shadow(0 0 10px rgba(var(--hc), calc(0.55 * var(--op-boost))));
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  background: var(--page-bg);
 }
 
-.gen-mark-spin {
-  transform-origin: 16px 16px;
-  animation: gen-spin 4s linear infinite;
-}
-
-@keyframes gen-spin {
+@keyframes gen-spin-simple {
   to { transform: rotate(360deg); }
 }
 
@@ -212,17 +248,7 @@
   font-size: 1.15rem;
   font-weight: 800;
   letter-spacing: 0.06em;
-  color: rgba(var(--accent-active), calc(0.95 * var(--op-boost)));
-  text-shadow: 0 0 10px rgba(var(--accent-active), calc(0.55 * var(--op-boost)));
-}
-
-.gen-core {
-  animation: gen-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes gen-pulse {
-  0%, 100% { opacity: 1;    transform: scale(1);   }
-  50%       { opacity: 0.4; transform: scale(0.6); }
+  color: rgba(var(--accent-pick, 100, 200, 255), 0.95);
 }
 
 .gen-text {
@@ -251,6 +277,7 @@
   width: clamp(120px, 50%, 160px);
   height: auto;
   margin: 0 auto 20px;
+  animation: splash-breathe 3.2s ease-in-out infinite;
 }
 
 /* Header text */
@@ -271,6 +298,7 @@
 .upload-header p:not(.caption-tagline) {
   margin: 0;
   font-size: 0.72rem;
+  font-weight: 600;
   letter-spacing: 0.06em;
   color: rgba(var(--hc), calc(0.35 * var(--op-boost)));
   line-height: 1.7;
@@ -375,7 +403,7 @@
   border: 1px solid rgba(var(--hc), calc(0.15 * var(--op-boost)));
   background: var(--input-bg);
   color: rgba(var(--hc), calc(0.85 * var(--op-boost)));
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.66rem;
   width: 96px;
 }
@@ -395,7 +423,7 @@
   border-radius: 3px;
   background: rgba(255, 90, 90, 0.08);
   color: rgba(255, 120, 120, 0.85);
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.85rem;
   line-height: 1;
   cursor: pointer;
@@ -559,7 +587,6 @@
 
 .field-dot.filled {
   background: rgba(var(--hc), calc(0.95 * var(--op-boost)));
-  box-shadow: 0 0 6px rgba(var(--hc), calc(0.75 * var(--op-boost)));
 }
 
 .field input {
@@ -568,7 +595,7 @@
   border: 1px solid rgba(var(--hc), calc(0.15 * var(--op-boost)));
   background: var(--input-bg);
   color: rgba(var(--hc), calc(0.90 * var(--op-boost)));
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.82rem;
   letter-spacing: 0.06em;
   transition: border-color 0.2s ease;
@@ -580,7 +607,7 @@
   border: 1px solid rgba(var(--hc), calc(0.15 * var(--op-boost)));
   background: var(--input-bg);
   color: rgba(var(--hc), calc(0.90 * var(--op-boost)));
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.82rem;
   letter-spacing: 0.06em;
   line-height: 1.6;
@@ -654,7 +681,7 @@
   border-radius: 4px;
   background: rgba(var(--hc), calc(0.04 * var(--op-boost)));
   color: rgba(var(--hc), calc(0.85 * var(--op-boost)));
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.64rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -688,7 +715,6 @@
   height: 7px;
   border-radius: 50%;
   background: rgba(255, 90, 90, 0.95);
-  box-shadow: 0 0 6px rgba(255, 90, 90, 0.8);
   animation: rec-blink 1s step-end infinite;
 }
 
@@ -737,6 +763,7 @@
   font-size: 0.66rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  text-align: left;
   color: rgba(var(--accent-active), calc(0.85 * var(--op-boost)));
 }
 
@@ -757,10 +784,11 @@
   border-radius: 4px;
   background: rgba(var(--hc), calc(0.06 * var(--op-boost)));
   color: rgba(var(--hc), calc(0.90 * var(--op-boost)));
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -774,10 +802,11 @@
   border-radius: 4px;
   background: rgba(255, 90, 90, 0.06);
   color: rgba(255, 120, 120, 0.85);
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -803,7 +832,7 @@
   border: 1px solid rgba(var(--hc), calc(0.15 * var(--op-boost)));
   background: var(--input-bg);
   color: rgba(var(--hc), calc(0.90 * var(--op-boost)));
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.74rem;
 }
 
@@ -820,7 +849,7 @@
   border-radius: 4px;
   background: rgba(var(--hc), calc(0.08 * var(--op-boost)));
   color: rgba(var(--hc), calc(0.90 * var(--op-boost)));
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -878,7 +907,7 @@
   border-radius: 4px;
   background: rgba(var(--accent-active), calc(0.08 * var(--op-boost)));
   color: rgba(var(--accent-active), calc(0.95 * var(--op-boost)));
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -914,9 +943,9 @@
   bottom: 0;
   left: 0;
   width: 60px;
-  background: rgba(var(--accent-active), calc(0.16 * var(--op-boost)));
-  border-left: 2px solid rgba(var(--accent-active), calc(0.95 * var(--op-boost)));
-  border-right: 2px solid rgba(var(--accent-active), calc(0.95 * var(--op-boost)));
+  background: rgba(var(--accent-pick, 100, 200, 255), 0.18);
+  border-left: 2px solid rgba(var(--accent-pick, 100, 200, 255), 0.95);
+  border-right: 2px solid rgba(var(--accent-pick, 100, 200, 255), 0.95);
   cursor: grab;
 }
 
@@ -942,8 +971,7 @@
   height: 22px;
   margin: -11px 0 0 -2px;
   border-radius: 2px;
-  background: rgba(var(--accent-active), calc(1 * var(--op-boost)));
-  box-shadow: 0 0 6px rgba(var(--accent-active), calc(0.7 * var(--op-boost)));
+  background: rgb(var(--accent-pick, 100, 200, 255));
 }
 
 .crop-playhead {
@@ -965,7 +993,6 @@
   width: 2px;
   margin-left: -1px;
   background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
 }
 
 .crop-playhead.hidden { display: none; }
@@ -980,7 +1007,7 @@
 }
 
 .crop-range-label span {
-  color: rgba(var(--accent-active), calc(0.90 * var(--op-boost)));
+  color: rgba(var(--accent-pick, 100, 200, 255), 0.95);
   font-weight: 700;
 }
 
@@ -994,7 +1021,7 @@
   border-radius: 4px;
   background: rgba(var(--hc), calc(0.08 * var(--op-boost)));
   color: rgba(var(--hc), calc(0.90 * var(--op-boost)));
-  font-family: "Courier New", Courier, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -1053,19 +1080,169 @@
 /* Footer */
 .upload-footer {
   margin-top: 24px;
-  text-align: center;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
 }
 
-.upload-footer a {
-  font-size: 0.60rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+.footer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border: 1px solid rgba(var(--hc), calc(0.30 * var(--op-boost)));
+  border-radius: 999px;
+  background: rgba(var(--hc), calc(0.06 * var(--op-boost)));
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(var(--hc), calc(0.35 * var(--op-boost)));
+  color: rgba(var(--hc), calc(0.80 * var(--op-boost)));
   text-decoration: none;
-  transition: color 0.2s ease;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, color 0.2s ease;
 }
 
-.upload-footer a:hover {
-  color: rgba(var(--hc), calc(0.65 * var(--op-boost)));
+.footer-pill:hover {
+  background: rgba(var(--hc), calc(0.16 * var(--op-boost)));
+  border-color: rgba(var(--hc), calc(0.65 * var(--op-boost)));
+  color: rgba(var(--hc), 1);
+  transform: translateY(-1px);
+}
+
+.footer-pill:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* ── Custom cursor — flat filled circle + contrasting centre dot, same
+   shape language as the tab favicon/logo, just smaller. Colour tracks
+   --hc, so it's the picked accent in dark mode / near-black in light. ── */
+
+.upload-body { cursor: none; }
+
+.cursor-reticle {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2500;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  will-change: transform;
+}
+
+.cursor-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  background: rgb(var(--hc));
+  border-radius: 50%;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.cursor-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--page-bg);
+}
+
+.cursor-reticle.pressed .cursor-ring {
+  transform: scale(0.65);
+}
+
+.cursor-reticle.hoverable .cursor-ring {
+  transform: scale(1.35);
+  background: rgb(var(--accent-active));
+}
+
+.click-ping {
+  position: fixed;
+  z-index: 999;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 2px solid rgb(var(--hc));
+  border-radius: 50%;
+  pointer-events: none;
+  animation: click-ping-anim 500ms ease-out forwards;
+}
+
+@keyframes click-ping-anim {
+  from { width: 10px; height: 10px; margin: -5px 0 0 -5px; opacity: 0.9; }
+  to   { width: 50px; height: 50px; margin: -25px 0 0 -25px; opacity: 0; }
+}
+
+/* ── Intro splash — logo, name, and a Start button you actually tap through
+   (not a timed auto-fade) before the app/viewer appears. ── */
+
+.app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background: var(--page-bg);
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+.app-splash.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.splash-logo {
+  width: clamp(150px, 46vw, 220px);
+  height: auto;
+  animation: splash-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes splash-breathe {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.05); }
+}
+
+.splash-orbit {
+  transform-origin: 0 0;
+  animation: splash-orbit-spin 6s linear infinite;
+}
+
+@keyframes splash-orbit-spin {
+  to { transform: rotate(360deg); }
+}
+
+.splash-start-btn {
+  padding: 14px 38px;
+  border: none;
+  border-radius: 999px;
+  background: rgb(var(--hc));
+  color: var(--page-bg);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.2s ease;
+}
+
+.splash-start-btn:hover {
+  transform: scale(1.04);
+}
+
+.splash-start-btn:active {
+  transform: scale(0.97);
 }

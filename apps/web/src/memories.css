@@ -2,192 +2,234 @@
 
 .stitched-heading,
 .individual-heading {
-  font-size: 0.66rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 800;
   letter-spacing: 0.10em;
   text-transform: uppercase;
   margin: 0 0 4px;
 }
 
-.stitched-heading {
-  color: rgba(var(--accent-active), 0.90);
+.stitched-heading,
+.individual-heading {
+  color: rgba(var(--hc), calc(0.85 * var(--op-boost)));
 }
 
 .individual-heading {
-  color: rgba(var(--hc), 0.45);
   margin-top: 22px;
   padding-top: 18px;
-  border-top: 1px solid rgba(var(--hc), 0.10);
+  border-top: 1px solid rgba(var(--hc), calc(0.15 * var(--op-boost)));
 }
 
+/* Clean, evenly-spaced grid — no overlap between cards, on purpose: any
+   overlapping-stack layout inevitably clips someone's edge content (text,
+   delete button) as you scroll past it. Spacing everything out instead
+   means nothing ever has a reason to hide behind its neighbour. */
 .memories-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 22px;
+  gap: 14px;
+  padding: 6px 0 28px;
+  margin-bottom: 4px;
+  max-height: 70vh;
+  overflow-y: auto;
+  scroll-snap-type: y proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
-/* Stitched cards get the amber "collective work" accent throughout the
-   app, distinguishing them at a glance from individually-uploaded photos */
-#stitched-list .memory-card {
-  border-color: rgba(var(--accent-active), 0.25);
-}
-
-#stitched-list .memory-card:hover {
-  border-color: rgba(var(--accent-active), 0.60);
-  background: rgba(var(--accent-active), 0.06);
-}
-
-#stitched-list .memory-card.active {
-  border-color: rgba(var(--accent-active), 0.85);
-  background: rgba(var(--accent-active), 0.10);
-}
-
-#stitched-list .memory-name {
-  color: rgba(var(--accent-active), 0.95);
-}
-
-#stitched-list .memory-thumb.placeholder {
-  border-color: rgba(var(--accent-active), 0.25);
-  color: rgba(var(--accent-active), 0.55);
-}
-
-#stitched-list .memory-go {
-  border-color: rgba(var(--accent-active), 0.40);
-  color: rgba(var(--accent-active), 0.90);
-}
-
-#stitched-list .memory-card:hover .memory-go {
-  background: rgba(var(--accent-active), 0.18);
-  border-color: rgba(var(--accent-active), 0.75);
-}
+.memories-list::-webkit-scrollbar { display: none; }
 
 .memory-card {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  border: 1px solid rgba(var(--hc), 0.15);
-  border-radius: 4px;
-  padding: 10px 12px;
-  background: rgba(var(--hc), 0.02);
+  position: relative;
+  aspect-ratio: 1 / 1;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  scroll-snap-align: start;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), filter 0.25s ease;
 }
 
-.memory-card:hover {
-  border-color: rgba(var(--hc), 0.50);
-  background: rgba(var(--hc), 0.05);
+/* New card arriving — a stitched scene the memory brain just finished, or a
+   freshly-uploaded photo on the next poll — fades and slides up into place. */
+.memory-card.entering {
+  animation: card-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.memory-card.active {
-  border-color: rgba(var(--accent-active), 0.70);
-  background: rgba(var(--accent-active), 0.08);
+@keyframes card-enter {
+  from { opacity: 0; translate: 0 28px; }
+  to   { opacity: 1; translate: 0 0;    }
 }
 
-.memory-thumb {
-  width: 56px;
-  height: 56px;
-  object-fit: cover;
-  border-radius: 3px;
-  border: 1px solid rgba(var(--hc), 0.15);
-  flex-shrink: 0;
-  background: rgba(0, 0, 0, 0.4);
+.memory-card:hover,
+.memory-card.revealed {
+  transform: translateY(-6px) scale(1.02);
 }
 
-.memory-thumb.placeholder {
+.memory-card.active .memory-card-frame {
+  border-color: rgba(var(--accent-active), 0.85);
+  border-width: 2px;
+}
+
+.memory-card-frame {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-color: rgba(var(--hc), calc(0.08 * var(--op-boost)));
+  border: 1px solid rgba(var(--hc), calc(0.25 * var(--op-boost)));
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.memory-card:hover .memory-card-frame {
+  border-color: rgba(var(--hc), calc(0.65 * var(--op-boost)));
+}
+
+.memory-card.active .memory-card-frame {
+  border-color: rgba(var(--accent-active), 0.85);
+}
+
+/* Darkens once "revealed" so the eye button reads clearly over any photo */
+.memory-card.revealed .memory-card-frame {
+  filter: brightness(0.55);
+}
+
+/* Centered eye button — appears on first tap; tapping it is what actually
+   sends the memory to the viewer. Two-step on purpose, so a stray tap while
+   scrolling the stack never accidentally jumps the live viewer. */
+.memory-card-show {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
+  z-index: 3;
+  padding: 12px 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.60rem;
-  font-weight: 700;
-  color: rgba(var(--hc), 0.30);
-}
-
-.memory-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.memory-name {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: rgba(var(--hc), 0.88);
-  margin: 0 0 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.memory-meta {
-  font-size: 0.58rem;
+  border: 1px solid rgba(var(--accent-active), 0.7);
+  border-radius: 999px;
+  background: rgba(10, 10, 14, 0.65);
+  backdrop-filter: blur(6px);
+  color: rgba(var(--accent-active), 0.95);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(var(--hc), 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.memory-go {
-  flex-shrink: 0;
-  padding: 7px 12px;
-  border: 1px solid rgba(var(--hc), 0.35);
-  border-radius: 4px;
-  background: rgba(var(--hc), 0.06);
-  color: rgba(var(--hc), 0.85);
-  font-family: "Courier New", Courier, monospace;
-  font-size: 0.56rem;
+.memory-card.revealed .memory-card-show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.memory-card-show:hover {
+  background: rgba(var(--accent-active), 0.25);
+  border-color: rgba(var(--accent-active), 1);
+}
+
+.memory-card-frame.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: rgba(var(--hc), calc(0.30 * var(--op-boost)));
+}
+
+.memory-card-overlay {
+  position: absolute;
+  bottom: 14px;
+  left: 18px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.memory-card-name {
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95), 0 0 18px rgba(0, 0, 0, 0.7);
+  line-height: 1.15;
+}
+
+.memory-card.active .memory-card-name {
+  color: rgba(var(--accent-active), 1);
+}
+
+.memory-card-meta {
+  margin-top: 2px;
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.memory-card:hover .memory-go {
-  background: rgba(var(--hc), 0.16);
-  border-color: rgba(var(--hc), 0.70);
-}
-
-.memory-card.active .memory-go {
-  border-color: rgba(var(--accent-active), 0.85);
-  color: rgba(var(--accent-active), 0.95);
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
 }
 
 .memory-delete {
-  flex-shrink: 0;
-  margin-left: 6px;
-  width: 30px;
-  height: 30px;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 90, 90, 0.30);
-  border-radius: 4px;
-  background: rgba(255, 90, 90, 0.06);
-  color: rgba(255, 120, 120, 0.80);
-  font-family: "Courier New", Courier, monospace;
+  border: 1px solid rgba(255, 90, 90, 0.45);
+  border-radius: 999px;
+  background: rgba(20, 4, 4, 0.55);
+  backdrop-filter: blur(6px);
+  color: rgba(255, 140, 140, 0.95);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, width 0.2s ease;
 }
 
 .memory-delete:hover {
-  background: rgba(255, 90, 90, 0.16);
-  border-color: rgba(255, 90, 90, 0.65);
+  background: rgba(255, 90, 90, 0.30);
+  border-color: rgba(255, 90, 90, 0.85);
 }
 
 .memory-delete.confirming {
   width: auto;
   padding: 0 10px;
-  background: rgba(255, 90, 90, 0.22);
-  border-color: rgba(255, 90, 90, 0.85);
-  color: rgba(255, 150, 150, 0.95);
+  background: rgba(255, 90, 90, 0.45);
+  border-color: rgba(255, 90, 90, 0.95);
+  color: #fff;
   text-transform: uppercase;
   font-size: 0.56rem;
+  font-weight: 700;
 }
 
 .memory-card.deleting {
-  opacity: 0.35;
+  opacity: 0.25;
   pointer-events: none;
   transition: opacity 0.2s ease;
+}
+
+/* Stitched cards get the amber "collective work" accent throughout the
+   app, distinguishing them at a glance from individually-uploaded photos */
+#stitched-list .memory-card-frame {
+  border-color: rgba(var(--accent-active), calc(0.30 * var(--op-boost)));
+}
+
+#stitched-list .memory-card:hover .memory-card-frame {
+  border-color: rgba(var(--accent-active), 0.70);
+}
+
+#stitched-list .memory-card-name {
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95);
 }

@@ -4,10 +4,11 @@
 
 .gap-status {
   margin: 0 0 16px;
-  font-size: 0.66rem;
-  letter-spacing: 0.10em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(var(--hc), 0.40);
+  color: rgba(var(--hc), calc(0.70 * var(--op-boost)));
   text-align: center;
 }
 
@@ -83,8 +84,9 @@
 .gap-empty {
   text-align: center;
   font-size: 0.72rem;
-  letter-spacing: 0.05em;
-  color: rgba(var(--hc), 0.45);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: rgba(var(--hc), calc(0.65 * var(--op-boost)));
   line-height: 1.8;
   padding: 12px 0 4px;
 }

@@ -1,7 +1,10 @@
 import "./memories.css";
-import { initThemeToggle } from "./theme.js";
+import { initThemeToggle, carryAccentToViewerLinks, initCursor, initTapSounds } from "./theme.js";
 
 initThemeToggle();
+carryAccentToViewerLinks();
+initCursor();
+initTapSounds();
 
 const statusEl = document.getElementById("memories-status");
 const listEl = document.getElementById("memories-list");
@@ -15,6 +18,45 @@ pageBackBtn?.addEventListener("click", () => {
 });
 
 let activeCardEl = null;
+
+// Tracks which memory IDs are already on screen per list, so re-rendering on
+// each 15s poll only adds/removes what actually changed instead of nuking
+// and rebuilding every card — that's what lets a genuinely new card (e.g. a
+// stitched scene the memory brain just finished) play its tile-entrance
+// animation, while everything already there stays put, undisturbed.
+const renderedCards = { individual: new Map(), stitched: new Map() };
+
+function syncCardList(container, listKey, memories, emptyHtml) {
+  const map = renderedCards[listKey];
+
+  if (!memories.length) {
+    container.innerHTML = emptyHtml;
+    map.clear();
+    return;
+  }
+  // First real render for this list — clear the "loading"/empty placeholder
+  if (!map.size && container.querySelector(".gap-empty")) {
+    container.innerHTML = "";
+  }
+
+  const seen = new Set();
+  for (const memory of memories) {
+    seen.add(memory.id);
+    if (map.has(memory.id)) continue; // already on screen — leave it alone
+    const card = buildMemoryCard(memory);
+    card.classList.add("entering");
+    card.addEventListener("animationend", () => card.classList.remove("entering"), { once: true });
+    container.appendChild(card);
+    map.set(memory.id, card);
+  }
+
+  for (const [id, card] of map) {
+    if (!seen.has(id)) {
+      card.remove();
+      map.delete(id);
+    }
+  }
+}
 
 async function loadMemories() {
   try {
@@ -38,61 +80,66 @@ async function loadMemories() {
 }
 
 function renderStitched(memories) {
-  if (!memories.length) {
-    stitchedStatusEl.textContent = "";
-    stitchedListEl.innerHTML =
-      `<p class="gap-empty">None yet — once 2+ people upload photos of the same place, the memory brain's collective scenes will appear here.</p>`;
-    return;
-  }
-
-  stitchedStatusEl.textContent =
-    `${memories.length} collective scene${memories.length > 1 ? "s" : ""} — built by aligning multiple people's photos of the same place:`;
-
-  stitchedListEl.innerHTML = "";
-  for (const memory of memories) {
-    stitchedListEl.appendChild(buildMemoryCard(memory));
-  }
+  stitchedStatusEl.textContent = memories.length
+    ? `${memories.length} collective scene${memories.length > 1 ? "s" : ""} — built by aligning multiple people's photos of the same place:`
+    : "";
+  syncCardList(
+    stitchedListEl,
+    "stitched",
+    memories,
+    `<p class="gap-empty">None yet — once 2+ people upload photos of the same place, the memory brain's collective scenes will appear here.</p>`,
+  );
 }
 
 function renderIndividual(memories) {
-  if (!memories.length) {
-    statusEl.textContent = "";
-    listEl.innerHTML = `<p class="gap-empty">No memories yet — be the first to share one from the main page.</p>`;
-    return;
-  }
-
-  statusEl.textContent =
-    `${memories.length} memor${memories.length > 1 ? "ies" : "y"} in the archive — tap one to show it on the viewer:`;
-
-  listEl.innerHTML = "";
-  for (const memory of memories) {
-    listEl.appendChild(buildMemoryCard(memory));
-  }
+  statusEl.textContent = memories.length
+    ? `${memories.length} memor${memories.length > 1 ? "ies" : "y"} in the archive — tap one to show it on the viewer:`
+    : "";
+  syncCardList(
+    listEl,
+    "individual",
+    memories,
+    `<p class="gap-empty">No memories yet — be the first to share one from the main page.</p>`,
+  );
 }
 
 function buildMemoryCard(memory) {
   const card = document.createElement("div");
   card.className = "memory-card";
 
-  const thumb = memory.image_url
-    ? `<img class="memory-thumb" src="${memory.image_url}" alt="" />`
-    : `<div class="memory-thumb placeholder">3D</div>`;
+  const frame = memory.image_url
+    ? `<div class="memory-card-frame" style="background-image:url('${memory.image_url}')"></div>`
+    : `<div class="memory-card-frame placeholder">3D</div>`;
 
   card.innerHTML = `
-    ${thumb}
-    <div class="memory-info">
-      <p class="memory-name">${escapeHtml(memory.name)}</p>
-      <p class="memory-meta">${escapeHtml(memory.author)}${memory.year ? " · " + escapeHtml(memory.year) : ""}</p>
+    ${frame}
+    <div class="memory-card-overlay">
+      <span class="memory-card-name">${escapeHtml(memory.name)}</span>
+      <span class="memory-card-meta">${escapeHtml(memory.author)}${memory.year ? " · " + escapeHtml(memory.year) : ""}</span>
     </div>
-    <button type="button" class="memory-go">Show</button>
-    <button type="button" class="memory-delete" aria-label="Delete this memory">🗑</button>
+    <button type="button" class="memory-card-show">Show</button>
+    <button type="button" class="memory-delete" aria-label="Delete this memory">Delete</button>
   `;
 
-  card.addEventListener("click", () => selectMemory(memory, card));
+  // First tap on the card just reveals the eye button (and un-reveals any
+  // other card) — actually sending it to the viewer is a deliberate second
+  // tap, on the eye itself, so flicking through the stack never accidentally
+  // jumps the live viewer to the wrong memory.
+  card.addEventListener("click", () => {
+    if (card.classList.contains("revealed")) return;
+    document.querySelectorAll(".memory-card.revealed").forEach(el => el.classList.remove("revealed"));
+    card.classList.add("revealed");
+  });
+
+  const showBtn = card.querySelector(".memory-card-show");
+  showBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    selectMemory(memory, card);
+  });
 
   const deleteBtn = card.querySelector(".memory-delete");
   deleteBtn.addEventListener("click", (event) => {
-    event.stopPropagation(); // don't also trigger selectMemory via the card click
+    event.stopPropagation(); // don't also trigger the reveal via the card click
     handleDeleteClick(memory, card, deleteBtn);
   });
 
@@ -112,7 +159,7 @@ function handleDeleteClick(memory, cardEl, btnEl) {
   btnEl.classList.add("confirming");
   btnEl._revertTimer = setTimeout(() => {
     btnEl.dataset.confirming = "0";
-    btnEl.textContent = "🗑";
+    btnEl.textContent = "Delete";
     btnEl.classList.remove("confirming");
   }, 3000);
 }

@@ -12,14 +12,75 @@
         var saved = localStorage.getItem("memo-theme");
         var theme = saved || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
         document.documentElement.dataset.theme = theme;
+
+        // One accent colour, picked fresh on every load — never persisted,
+        // so a new tab or a reopened app always lands on a different one.
+        // The soft variant (mixed toward white) is what the light-mode page
+        // background actually uses — full saturation is reserved for text/
+        // accents, a lighter tone reads better as a wash behind a white card.
+        var palette = [[31,46,110], [0,122,61], [242,169,0], [212,42,28], [15,76,129], [255,111,97], [95,75,139], [136,176,75], [187,38,73], [255,159,124], [102,103,171], [149,82,81], [0,128,128], [212,160,23], [233,30,99], [180,160,220], [204,85,0], [34,87,59]];
+        var rgb = palette[Math.floor(Math.random() * palette.length)];
+        var soft = rgb.map(function (c) { return Math.round(c + (255 - c) * 0.62); });
+        document.documentElement.style.setProperty("--accent-pick", rgb.join(","));
+        document.documentElement.style.setProperty("--accent-pick-soft", soft.join(","));
+        window.__memoAccentRgb = rgb;
+
+        // The static favicon.svg can't read CSS variables, so the browser
+        // tab icon is generated fresh here instead, in this load's colour —
+        // same logic every page on this domain shares, see setFavicon below.
+        var iconLink = document.querySelector('link[rel="icon"]');
+        if (iconLink) {
+          var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+            + '<circle cx="16" cy="16" r="15" fill="rgb(' + rgb.join(",") + ')"/>'
+            + '<circle cx="16" cy="16" r="5" fill="#06080c"/></svg>';
+          iconLink.href = "data:image/svg+xml," + encodeURIComponent(svg);
+        }
       })();
     </script>
   </head>
   <body class="upload-body">
-    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle light/dark mode">🌙</button>
+    <div id="app-splash" class="app-splash">
+      <svg class="splash-logo" viewBox="0 0 200 108" role="img" aria-label="Memo-Haus">
+        <g transform="translate(100,32)">
+          <ellipse rx="26" ry="11" fill="none" style="stroke: rgb(var(--hc))" stroke-width="1.6" transform="rotate(-18)"/>
+          <circle r="18" fill="none" style="stroke: rgb(var(--hc))" stroke-width="1.6"/>
+          <g class="splash-orbit">
+            <line x1="-18" y1="0" x2="-24" y2="0" style="stroke: rgb(var(--hc))" stroke-width="1.8"/>
+            <line x1="18" y1="0" x2="24" y2="0" style="stroke: rgb(var(--hc))" stroke-width="1.8"/>
+          </g>
+          <circle r="3.5" style="fill: rgb(var(--hc))"/>
+          <circle r="1.4" cx="-0.7" cy="-0.7" style="fill: var(--page-bg)"/>
+        </g>
+        <g text-anchor="middle">
+          <text x="100" y="74" font-size="24" font-weight="800" letter-spacing="6" style="fill: rgb(var(--hc))">MEMO</text>
+          <text x="100" y="100" font-size="24" font-weight="800" letter-spacing="6" style="fill: rgb(var(--hc))">HAUS</text>
+        </g>
+      </svg>
+      <button type="button" id="splash-start-btn" class="splash-start-btn">Step Into Memory</button>
+    </div>
+
+    <label class="theme-switch" aria-label="Toggle light/dark mode">
+      <input type="checkbox" id="theme-switch-input" />
+      <span class="theme-switch-track"><span class="theme-switch-knob"></span></span>
+    </label>
     <main class="upload-card">
       <header class="upload-header">
-        <img src="/logo.svg" alt="Memo-Haus" class="upload-logo" />
+        <svg class="upload-logo" viewBox="0 0 200 108" role="img" aria-label="Memo-Haus">
+          <g transform="translate(100,32)">
+            <ellipse rx="26" ry="11" fill="none" style="stroke: rgb(var(--hc))" stroke-width="1.6" transform="rotate(-18)"/>
+            <circle r="18" fill="none" style="stroke: rgb(var(--hc))" stroke-width="1.6"/>
+            <g class="splash-orbit">
+              <line x1="-18" y1="0" x2="-24" y2="0" style="stroke: rgb(var(--hc))" stroke-width="1.8"/>
+              <line x1="18" y1="0" x2="24" y2="0" style="stroke: rgb(var(--hc))" stroke-width="1.8"/>
+            </g>
+            <circle r="3.5" style="fill: rgb(var(--hc))"/>
+            <circle r="1.4" cx="-0.7" cy="-0.7" style="fill: var(--page-bg)"/>
+          </g>
+          <g text-anchor="middle">
+            <text x="100" y="74" font-size="24" font-weight="800" letter-spacing="6" style="fill: rgb(var(--hc))">MEMO</text>
+            <text x="100" y="100" font-size="24" font-weight="800" letter-spacing="6" style="fill: rgb(var(--hc))">HAUS</text>
+          </g>
+        </svg>
         <p class="caption-tagline">From Archive To Participatory Experience</p>
         <p>Share a photo from your Wolfsburg archive and watch it come alive as an immersive 3D scene.</p>
         <p class="terminal-line">MEMORY UPLINK ESTABLISHED <span class="blink-cursor">█</span></p>
@@ -69,18 +130,9 @@
           <p class="audio-hint">Plays for as long as this memory is on screen — clips are capped at 1:00 to match.</p>
 
           <div id="audio-empty" class="audio-options">
-            <button type="button" id="record-voice-btn" class="audio-option-btn">
-              <span class="audio-icon-wrap"><span class="audio-icon">🎙️</span></span>
-              Record Voice
-            </button>
-            <button type="button" id="browse-music-btn" class="audio-option-btn">
-              <span class="audio-icon-wrap"><span class="audio-icon">🎧</span></span>
-              Browse Music
-            </button>
-            <button type="button" id="upload-audio-btn" class="audio-option-btn">
-              <span class="audio-icon-wrap"><span class="audio-icon">📁</span></span>
-              Upload Audio
-            </button>
+            <button type="button" id="record-voice-btn" class="audio-option-btn">Record Voice</button>
+            <button type="button" id="browse-music-btn" class="audio-option-btn">Browse Music</button>
+            <button type="button" id="upload-audio-btn" class="audio-option-btn">Upload Audio</button>
             <input type="file" id="audio-file-input" accept="audio/*" class="visually-hidden" />
           </div>
 
@@ -138,35 +190,28 @@
       </form>
 
       <footer class="upload-footer">
-        <a href="/memories.html">Browse memories &amp; choose what's shown →</a>
-        <br />
-        <a href="/contribute.html">Help complete a missing memory →</a>
-        <br />
-        <a href="/viewer.html" target="_blank" rel="noopener">Open the live viewer →</a>
+        <a href="/memories.html" class="footer-pill">Memories</a>
+        <a href="/contribute.html" class="footer-pill">Fill a Gap</a>
+        <a href="/viewer.html" target="_blank" rel="noopener" class="footer-pill">Live Viewer</a>
       </footer>
 
       <!-- Reconstruction overlay — the photo decoding into spatial memory -->
       <div id="generating-overlay" class="generating-overlay hidden">
         <div class="gen-stage">
-          <span class="gen-ring r1"></span>
-          <span class="gen-ring r2"></span>
-          <span class="gen-ring r3"></span>
-          <svg class="gen-mark" viewBox="0 0 32 32" width="56" height="56">
-            <g class="gen-mark-spin">
-              <ellipse cx="16" cy="16" rx="12" ry="5" fill="none" stroke="#64c8ff" stroke-opacity="0.40" stroke-width="1" transform="rotate(-18 16 16)"/>
-              <circle cx="16" cy="16" r="8.5" fill="none" stroke="#64c8ff" stroke-opacity="0.55" stroke-width="1"/>
-              <line x1="7.5" y1="16" x2="5" y2="16" stroke="#64c8ff" stroke-opacity="0.75" stroke-width="1"/>
-              <line x1="24.5" y1="16" x2="27" y2="16" stroke="#64c8ff" stroke-opacity="0.75" stroke-width="1"/>
-            </g>
-            <circle cx="16" cy="16" r="3.5" fill="#e8a33d" fill-opacity="0.18"/>
-            <circle cx="16" cy="16" r="1.8" fill="#e8a33d" fill-opacity="0.95" class="gen-core"/>
-          </svg>
+          <div class="gen-mark-simple">
+            <span class="gen-dot"></span>
+          </div>
         </div>
         <p class="gen-percent" id="gen-percent">0%</p>
         <p class="gen-batch hidden" id="gen-batch"></p>
         <p class="gen-text"><span id="gen-text-content">DECODING LIGHT PATTERNS</span><span class="blink-cursor">█</span></p>
       </div>
     </main>
+
+    <div id="cursor-reticle" class="cursor-reticle">
+      <span class="cursor-ring"></span>
+      <span class="cursor-dot"></span>
+    </div>
 
     <script type="module" src="/src/upload.js"></script>
   </body>
