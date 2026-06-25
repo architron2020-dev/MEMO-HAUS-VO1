@@ -128,6 +128,11 @@
       <span class="cursor-dot"></span>
     </div>
 
+    <!-- World of Memories — loads every scene at once, spread apart in 3D
+         space, for free exploration instead of the one-at-a-time rotation -->
+    <button type="button" id="world-mode-btn" class="world-mode-btn" disabled>Enter Memory Verse</button>
+    <div id="world-debug" class="world-debug hidden"></div>
+
     <!-- Keyboard navigation guide — small closable tab, expands on click -->
     <button type="button" id="nav-hint-tab" class="nav-hint-tab">?</button>
     <div id="nav-hint-panel" class="nav-hint-panel hidden">
@@ -138,7 +143,7 @@
       <div class="nav-hint-row"><span class="nk">Q E</span> up / down</div>
       <div class="nav-hint-row"><span class="nk">drag</span> look</div>
       <div class="nav-hint-row"><span class="nk">scroll</span> zoom</div>
-      <div class="nav-hint-row"><span class="nk">click</span> reset</div>
+      <div class="nav-hint-row"><span class="nk">click</span> reset / focus memory</div>
       <div class="nav-hint-row"><span class="nk">F</span> fullscreen</div>
     </div>
 

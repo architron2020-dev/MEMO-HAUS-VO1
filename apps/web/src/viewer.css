@@ -395,7 +395,7 @@ html, body {
 .processing-loader {
   position: fixed;
   top: 20px;
-  left: 20px;
+  right: 20px;
   z-index: 30;
   display: flex;
   align-items: center;
@@ -560,3 +560,61 @@ html, body {
 
 .splash-start-btn:hover { transform: scale(1.04); }
 .splash-start-btn:active { transform: scale(0.97); }
+
+/* ── World of Memories toggle ─────────────────────────────────────────── */
+
+.world-mode-btn {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 29;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--hc), calc(0.35 * var(--op-boost)));
+  background: var(--chrome-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(var(--hc), calc(0.95 * var(--op-boost)));
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.world-mode-btn:hover {
+  background: rgba(var(--hc), calc(0.14 * var(--op-boost)));
+  border-color: rgba(var(--hc), calc(0.6 * var(--op-boost)));
+}
+
+.world-mode-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.world-mode-btn.active {
+  background: rgb(var(--hc));
+  color: var(--page-bg);
+}
+
+/* Temporary on-screen diagnostics for Memory Verse loading — visible
+   instead of only logging to a console that may not be open. */
+.world-debug {
+  position: fixed;
+  top: 64px;
+  left: 20px;
+  z-index: 40;
+  max-width: 420px;
+  padding: 10px 14px;
+  background: rgba(8, 8, 12, 0.85);
+  border: 1px solid rgba(var(--hc), 0.4);
+  border-radius: 8px;
+  font-family: ui-monospace, "Courier New", monospace;
+  font-size: 0.7rem;
+  line-height: 1.6;
+  color: rgba(var(--hc), 0.9);
+  white-space: pre-wrap;
+}
+
+.world-debug.hidden { display: none; }

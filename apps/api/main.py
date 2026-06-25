@@ -57,9 +57,20 @@ _selection_lock = threading.Lock()
 _selected_scene_id: str | None = None
 _selected_at: float = 0.0
 
+# Same idea, but for Memory Verse: a curated list of ids instead of one, so
+# the world only ever loads scenes the visitor actually picked — keeps it
+# fast and avoids placing dozens of scenes (and giant stitched merges) at
+# once, which is what made it laggy and prone to clashing.
+_world_selected_ids: list[str] = []
+_world_selected_at: float = 0.0
+
 
 class SelectScenePayload(BaseModel):
     scene_id: str
+
+
+class WorldSelectionPayload(BaseModel):
+    scene_ids: list[str]
 
 app = FastAPI(title="Memo-House API")
 app.add_middleware(
@@ -134,6 +145,25 @@ def select_scene(payload: SelectScenePayload) -> dict:
 def get_selected_scene() -> dict:
     with _selection_lock:
         return {"scene_id": _selected_scene_id, "selected_at": _selected_at}
+
+
+@app.post("/api/world-selection")
+def set_world_selection(payload: WorldSelectionPayload) -> dict:
+    """Mobile app calls this after multi-selecting memories to place in
+    Memory Verse. Mirrors /api/select-scene's pattern exactly, just for a
+    list instead of one id — the viewer polls GET and enters the world with
+    exactly this set, leaving everything else about it unchanged."""
+    global _world_selected_ids, _world_selected_at
+    with _selection_lock:
+        _world_selected_ids = payload.scene_ids
+        _world_selected_at = now()
+        return {"scene_ids": _world_selected_ids, "selected_at": _world_selected_at}
+
+
+@app.get("/api/world-selection")
+def get_world_selection() -> dict:
+    with _selection_lock:
+        return {"scene_ids": _world_selected_ids, "selected_at": _world_selected_at}
 
 
 @app.delete("/api/scenes/{scene_id}")

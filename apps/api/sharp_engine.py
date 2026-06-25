@@ -85,9 +85,18 @@ class SharpEngine:
         height, width = image.shape[:2]
 
         with self._lock:
-            gaussians = predict_image(
-                self._predictor, image, f_px, torch.device(self.device)
-            )
+            try:
+                gaussians = predict_image(
+                    self._predictor, image, f_px, torch.device(self.device)
+                )
+            finally:
+                # This card only has 4GB of VRAM — PyTorch's allocator caches
+                # freed blocks instead of returning them to the driver, which
+                # fragments fast across many differently-sized uploads and
+                # eventually looks like an OOM even with memory "free".
+                # Releasing the cache after every request keeps that in check.
+                if self.device == "cuda":
+                    torch.cuda.empty_cache()
 
         output_ply.parent.mkdir(parents=True, exist_ok=True)
         save_ply(gaussians, f_px, (height, width), output_ply)

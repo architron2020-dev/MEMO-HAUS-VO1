@@ -55,6 +55,15 @@
 
 * { box-sizing: border-box; }
 
+/* Scrolling still works (wheel, touch swipe) — just no visible scrollbar
+   track taking up space or breaking the full-bleed look. */
+html {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  display: none;
+}
+
 .upload-body {
   margin: 0;
   min-height: 100dvh;
@@ -116,6 +125,26 @@
 
 .theme-switch input:checked ~ .theme-switch-track {
   background: rgb(var(--accent-active));
+}
+
+.fullscreen-toggle-btn {
+  position: fixed;
+  top: 16px;
+  right: 64px;
+  z-index: 10;
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgb(var(--hc));
+  border-radius: 50%;
+  background: var(--page-bg);
+  color: rgb(var(--hc));
+  font-size: 0.6rem;
+  line-height: 1;
+  cursor: pointer;
 }
 
 /* Faint technical grid — texture, not glow */

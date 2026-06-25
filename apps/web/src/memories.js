@@ -54,6 +54,12 @@ function syncCardList(container, listKey, memories, emptyHtml) {
     if (!seen.has(id)) {
       card.remove();
       map.delete(id);
+      // A selected memory disappearing (deleted, etc.) shouldn't leave a
+      // stale entry pointing at a detached card.
+      if (verseSelection.has(id)) {
+        verseSelection.delete(id);
+        syncWorldSelectBar();
+      }
     }
   }
 }
@@ -117,6 +123,7 @@ function buildMemoryCard(memory) {
       <span class="memory-card-name">${escapeHtml(memory.name)}</span>
       <span class="memory-card-meta">${escapeHtml(memory.author)}${memory.year ? " · " + escapeHtml(memory.year) : ""}</span>
     </div>
+    <button type="button" class="memory-verse-toggle" aria-label="Add to Memory Verse selection"></button>
     <button type="button" class="memory-card-show">Show</button>
     <button type="button" class="memory-delete" aria-label="Delete this memory">Delete</button>
   `;
@@ -143,8 +150,77 @@ function buildMemoryCard(memory) {
     handleDeleteClick(memory, card, deleteBtn);
   });
 
+  const verseToggleBtn = card.querySelector(".memory-verse-toggle");
+  verseToggleBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleVerseSelection(memory.id, card, verseToggleBtn);
+  });
+
   return card;
 }
+
+// ── Memory Verse multi-select ───────────────────────────────────────────
+// Picking which memories go into Memory Verse, then sending that set to
+// whichever viewer is open — independent of the existing single-select
+// "Show" flow above, which still always means "this one, right now".
+
+const worldSelectBarEl   = document.getElementById("world-select-bar");
+const worldSelectCountEl = document.getElementById("world-select-count");
+const worldSelectClearBtn = document.getElementById("world-select-clear");
+const worldSelectEnterBtn = document.getElementById("world-select-enter");
+
+const verseSelection = new Map(); // memory id -> { card, toggleBtn }
+
+function toggleVerseSelection(memoryId, card, toggleBtn) {
+  if (verseSelection.has(memoryId)) {
+    verseSelection.delete(memoryId);
+    card.classList.remove("verse-selected");
+    toggleBtn.classList.remove("selected");
+  } else {
+    verseSelection.set(memoryId, { card, toggleBtn });
+    card.classList.add("verse-selected");
+    toggleBtn.classList.add("selected");
+  }
+  syncWorldSelectBar();
+}
+
+function syncWorldSelectBar() {
+  const count = verseSelection.size;
+  worldSelectBarEl.classList.toggle("hidden", count === 0);
+  worldSelectCountEl.textContent = `${count} selected`;
+}
+
+worldSelectClearBtn.addEventListener("click", () => {
+  for (const { card, toggleBtn } of verseSelection.values()) {
+    card.classList.remove("verse-selected");
+    toggleBtn.classList.remove("selected");
+  }
+  verseSelection.clear();
+  syncWorldSelectBar();
+});
+
+worldSelectEnterBtn.addEventListener("click", async () => {
+  const sceneIds = Array.from(verseSelection.keys());
+  if (sceneIds.length === 0) return;
+  worldSelectEnterBtn.disabled = true;
+  worldSelectEnterBtn.textContent = "Sending…";
+  try {
+    const res = await fetch("/api/world-selection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scene_ids: sceneIds }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    worldSelectEnterBtn.textContent = "Sent to viewer ✓";
+    setTimeout(() => { worldSelectEnterBtn.textContent = "Enter Memory Verse"; }, 2000);
+  } catch (err) {
+    console.error(err);
+    worldSelectEnterBtn.textContent = "Failed — try again";
+    setTimeout(() => { worldSelectEnterBtn.textContent = "Enter Memory Verse"; }, 2000);
+  } finally {
+    worldSelectEnterBtn.disabled = false;
+  }
+});
 
 // Two-step inline confirm — no native confirm() dialog, matches the rest of
 // this app's custom UI. First click arms it; a second click within 3s

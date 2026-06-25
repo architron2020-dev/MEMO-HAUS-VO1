@@ -1,10 +1,11 @@
 import "./upload.css";
-import { initThemeToggle, carryAccentToViewerLinks, initCursor, initSplash, initTapSounds } from "./theme.js";
+import { initThemeToggle, carryAccentToViewerLinks, initCursor, initSplash, initFullscreenToggle, initTapSounds } from "./theme.js";
 
 initThemeToggle();
 carryAccentToViewerLinks();
 initCursor();
 initSplash();
+initFullscreenToggle();
 initTapSounds();
 
 const form = document.getElementById("upload-form");

@@ -24,6 +24,21 @@ const cursorReticleEl    = document.getElementById("cursor-reticle");
 const navHintTabEl       = document.getElementById("nav-hint-tab");
 const navHintPanelEl     = document.getElementById("nav-hint-panel");
 const navHintCloseEl     = document.getElementById("nav-hint-close");
+const worldModeBtnEl     = document.getElementById("world-mode-btn");
+const worldDebugEl       = document.getElementById("world-debug");
+
+// Temporary — writes status directly into the page since the browser
+// console isn't always at hand while testing on the kiosk display itself.
+const worldLog = (() => {
+  let lines = [];
+  return (msg) => {
+    lines.push(msg);
+    if (lines.length > 10) lines = lines.slice(-10);
+    worldDebugEl.textContent = lines.join("\n");
+    worldDebugEl.classList.remove("hidden");
+    console.log("[memory-verse]", msg);
+  };
+})();
 
 const DWELL_MS        = 60_000;
 const POLL_INTERVAL   = 4_000;
@@ -43,6 +58,50 @@ let started       = false;
 let errorTimer    = null;
 let resetRaf      = null;
 let storyOverlayTimer = null;
+
+// ── World of Memories — every scene loaded at once, spread apart in a
+// permanent, ever-expanding spiral so new memories just keep finding the
+// next free slot instead of needing the whole field rearranged. ────────────
+
+let worldMode = false;
+// Scenes render at the same scale as the normal single-scene view (camera
+// sits ~3 units away there) — 6 units of clearance is already well past
+// that, so neighbours never overlap, without pushing them off into the
+// distance where they'd be imperceptibly small.
+const WORLD_SPACING = 6;
+const worldPositions = new Map(); // scene id -> [x, y, z]
+let worldPlacementCount = 0;
+
+// Square (Ulam-style) spiral: index 0 at the centre, each ring one step
+// further out — grows forever without ever revisiting or overlapping a cell.
+function spiralCoord(i) {
+  if (i === 0) return [0, 0];
+  let x = 0, y = 0;
+  let dx = 1, dy = 0;
+  let segmentLength = 1, segmentPassed = 0, legsInRing = 0;
+  for (let n = 0; n < i; n++) {
+    x += dx; y += dy;
+    segmentPassed++;
+    if (segmentPassed === segmentLength) {
+      segmentPassed = 0;
+      [dx, dy] = [-dy, dx];
+      legsInRing++;
+      if (legsInRing % 2 === 0) segmentLength++;
+    }
+  }
+  return [x, y];
+}
+
+// Assigns a scene its permanent grid slot the first time it's seen — once
+// set, a memory's place in the world never moves again, in this mode or out
+// of it, so revisiting the world later still finds everything where it was.
+function assignWorldPosition(scene) {
+  if (worldPositions.has(scene.id)) return worldPositions.get(scene.id);
+  const [gx, gy] = spiralCoord(worldPlacementCount++);
+  const pos = [gx * WORLD_SPACING, 0, gy * WORLD_SPACING];
+  worldPositions.set(scene.id, pos);
+  return pos;
+}
 
 let chain = Promise.resolve();
 const runExclusive = fn => { chain = chain.then(fn, fn); return chain; };
@@ -411,8 +470,18 @@ viewerEl.addEventListener("pointermove", e => {
   applyFPSCamera();
 });
 
-viewerEl.addEventListener("pointerup", () => {
-  if (_dragDist < 6) resetCamera();  // clean tap/click → reset
+viewerEl.addEventListener("pointerup", e => {
+  if (_dragDist < 6) {
+    // Clean tap/click, not a drag-look. In the World of Memories, that
+    // means "fly to whichever memory I tapped near"; otherwise it's the
+    // original single-scene reset-to-origin.
+    if (worldMode) {
+      const target = findNearestWorldScene(e.clientX, e.clientY);
+      if (target) flyToScene(target);
+    } else {
+      resetCamera();
+    }
+  }
   _dragging = false;
 });
 
@@ -468,30 +537,238 @@ function resetCamera() {
   resetRaf = requestAnimationFrame(tick);
 }
 
+// Generalised version of the same tween, used by World of Memories to fly
+// the camera to a specific scene instead of always returning to the origin.
+// Approaches from whichever side the camera already happens to be on, so the
+// camera glides over rather than teleporting around the target.
+function flyToScene(targetPos) {
+  if (!viewer?.camera) return;
+  if (resetRaf) cancelAnimationFrame(resetRaf);
+
+  const cam = viewer.camera;
+  const sp  = { x: cam.position.x, y: cam.position.y, z: cam.position.z };
+
+  let appX = sp.x - targetPos[0];
+  let appZ = sp.z - targetPos[2];
+  const appLen = Math.hypot(appX, appZ) || 1;
+  appX /= appLen; appZ /= appLen;
+
+  const STANDOFF = 3.2;
+  const ep = {
+    x: targetPos[0] + appX * STANDOFF,
+    y: targetPos[1],
+    z: targetPos[2] + appZ * STANDOFF,
+  };
+
+  const dx = targetPos[0] - ep.x;
+  const dy = targetPos[1] - ep.y;
+  const dz = targetPos[2] - ep.z;
+  const horizDist = Math.hypot(dx, dz) || 1e-6;
+  const targetYaw   = Math.atan2(dx, dz);
+  const targetPitch = Math.max(-1.30, Math.min(1.30, -Math.atan2(dy, horizDist)));
+
+  const sy = _yaw, sp2 = _pitch;
+  // Shortest-path yaw delta, so it never spins the long way round
+  let yawDelta = targetYaw - sy;
+  yawDelta = ((yawDelta + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+
+  const t0  = performance.now();
+  const DUR = 1100;
+
+  const tick = now => {
+    const raw  = Math.min((now - t0) / DUR, 1);
+    const ease = 1 - Math.pow(1 - raw, 3);
+
+    cam.position.x = sp.x + (ep.x - sp.x) * ease;
+    cam.position.y = sp.y + (ep.y - sp.y) * ease;
+    cam.position.z = sp.z + (ep.z - sp.z) * ease;
+
+    _yaw   = sy  + yawDelta * ease;
+    _pitch = sp2 + (targetPitch - sp2) * ease;
+    applyFPSCamera();
+
+    if (raw < 1) {
+      resetRaf = requestAnimationFrame(tick);
+    } else {
+      resetRaf = null;
+    }
+  };
+  resetRaf = requestAnimationFrame(tick);
+}
+
+// Projects a world position to on-screen pixel coordinates, using the
+// viewer's own camera/canvas — used to find which scene a click landed near.
+function projectToScreen(worldPos) {
+  const cam = viewer?.camera;
+  if (!cam) return null;
+  const Vec3 = cam.position.constructor;
+  const v = new Vec3(worldPos[0], worldPos[1], worldPos[2]);
+  v.project(cam);
+  if (v.z > 1) return null; // behind the camera
+  const rect = viewerEl.getBoundingClientRect();
+  return {
+    x: (v.x * 0.5 + 0.5) * rect.width + rect.left,
+    y: (1 - (v.y * 0.5 + 0.5)) * rect.height + rect.top,
+  };
+}
+
+const WORLD_CLICK_RADIUS_PX = 260;
+
+function findNearestWorldScene(clickX, clickY) {
+  let best = null, bestDist = Infinity;
+  for (const scene of scenes) {
+    const pos = worldPositions.get(scene.id);
+    if (!pos) continue;
+    const screen = projectToScreen(pos);
+    if (!screen) continue;
+    const d = Math.hypot(screen.x - clickX, screen.y - clickY);
+    if (d < bestDist) { bestDist = d; best = pos; }
+  }
+  return bestDist <= WORLD_CLICK_RADIUS_PX ? best : null;
+}
+
+// ── World of Memories — enter / exit ────────────────────────────────────────
+
+// sceneIds: optional explicit subset (from the mobile app's multi-select).
+// Omitted entirely -> every known scene, same as the viewer's own button.
+// Loading a curated handful instead of everything is also what keeps this
+// smooth — two dozen scenes (some of them giant stitched merges) at once is
+// what made navigation laggy in the first place.
+function buildWorldMode(sceneIds) {
+  const targetScenes = sceneIds
+    ? scenes.filter(s => sceneIds.includes(s.id))
+    : scenes;
+  if (targetScenes.length === 0) return;
+
+  const wasAlreadyIn = worldMode;
+  worldMode = true;
+  worldModeBtnEl.textContent = "Exit Memory Verse";
+  worldModeBtnEl.classList.add("active");
+  stopDwell();
+  hideHud();
+
+  return runExclusive(async () => {
+    worldLog(
+      wasAlreadyIn
+        ? `Rebuilding Memory Verse — ${targetScenes.length} memories selected.`
+        : `Entering Memory Verse — ${targetScenes.length} memories to place.`
+    );
+    await overlayTo(1);
+
+    try {
+      await removeAllScenes();
+    } catch (err) {
+      console.error("Failed clearing scenes before (re)entering the world:", err);
+    }
+    placeholderEl.classList.add("hidden");
+    ensureViewer();
+
+    // addSplatScenes() downloads every file in parallel before anything
+    // renders — fine for 2-3 scenes, but with a couple dozen (some of them
+    // multi-hundred-MB stitched merges) it just hangs on the browser's
+    // connection limit instead of ever resolving. Loading one at a time
+    // means the first memory appears almost immediately, and the rest keep
+    // streaming in afterward without blocking anything already visible.
+    let loadedCount = 0;
+    for (const s of targetScenes) {
+      const position = assignWorldPosition(s);
+      const label = s.year ? `${s.name || "Untitled"}, ${s.year}` : (s.name || "Untitled");
+      try {
+        await withLoadRetry(() => viewer.addSplatScene(s.ply_url, {
+          format: GaussianSplats3D.SceneFormat.Ply,
+          splatAlphaRemovalThreshold: 5,
+          showLoadingUI: false,
+          position,
+        }));
+        loadedCount++;
+        worldLog(`${loadedCount}/${targetScenes.length} — ${label}`);
+      } catch (err) {
+        worldLog(`Skipped "${label}" (failed to load)`);
+      }
+
+      // Reveal as soon as the very first scene is in, instead of making
+      // the visitor wait for all of them — the rest populate live.
+      if (loadedCount === 1) {
+        if (viewer?.camera) {
+          viewer.camera.position.set(0, 0, -4.5);
+          _yaw = 0;
+          _pitch = 0.15;
+          applyFPSCamera();
+        }
+        overlayEl.style.transition = "opacity 1200ms ease-in";
+        overlayEl.style.opacity = "0";
+        await new Promise(r => setTimeout(r, 1200));
+      }
+    }
+    worldLog(`All ${loadedCount} memories are in the world.`);
+    setTimeout(() => worldDebugEl.classList.add("hidden"), 1800);
+  });
+}
+
+function enterWorldMode() {
+  if (worldMode || scenes.length === 0) return;
+  return buildWorldMode(null);
+}
+
+function exitWorldMode() {
+  if (!worldMode) return;
+  worldMode = false;
+  worldModeBtnEl.textContent = "Enter Memory Verse";
+  worldModeBtnEl.classList.remove("active");
+
+  return runExclusive(async () => {
+    await overlayTo(1);
+
+    try {
+      await removeAllScenes();
+    } catch (err) {
+      console.error("Failed clearing the world on exit:", err);
+    }
+    activeSceneId = null; // force the next goToIndex to actually (re)load a scene
+    await overlayTo(0);
+    goToIndex(currentIndex >= 0 ? currentIndex : 0);
+  });
+}
+
+worldModeBtnEl.addEventListener("click", () => {
+  if (worldMode) exitWorldMode();
+  else enterWorldMode();
+});
+
 // ── Transition ────────────────────────────────────────────────────────────
 
-async function transitionTo(scene) {
-  const oldCount = viewer ? viewer.getSceneCount() : 0;
+// The library's internal "is loading" flag can apparently take a beat
+// longer to clear than the promise it returns suggests — calling
+// addSplatScene(s) again too soon throws "Cannot add splat scene while
+// another load or unload is already in progress." A few short retries
+// absorbs that instead of the whole operation failing outright.
+async function withLoadRetry(fn, attempts = 3, delayMs = 150) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === attempts - 1) throw err;
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+}
 
+async function removeAllScenes() {
+  const oldCount = viewer ? viewer.getSceneCount() : 0;
+  if (oldCount === 0 || !viewer) return;
+  await withLoadRetry(() =>
+    viewer.removeSplatScenes(Array.from({ length: oldCount }, (_, i) => i), false)
+  );
+}
+
+async function transitionTo(scene) {
   hideHud();
   await overlayTo(1);
 
-  if (oldCount > 0 && viewer) {
-    // Backstop on top of goToIndex's own exclusivity lock: the library's
-    // internal "is loading" flag can apparently take a beat longer to clear
-    // than the promise it returns suggests, so a couple of short retries
-    // here absorbs that instead of failing the whole transition.
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        await viewer.removeSplatScenes(
-          Array.from({ length: oldCount }, (_, i) => i), false
-        );
-        break;
-      } catch (err) {
-        if (attempt === 2) throw err;
-        await new Promise(r => setTimeout(r, 150));
-      }
-    }
+  try {
+    await removeAllScenes();
+  } catch (err) {
+    console.error("Failed clearing the previous scene:", err);
   }
   placeholderEl.classList.add("hidden");
   ensureViewer();
@@ -579,8 +856,33 @@ async function poll() {
     const fresh = all.filter(s => !known.has(s.id));
     if (!fresh.length) return;
     scenes.push(...fresh);
-    if (!started) { started = true; goToIndex(0); }
-    else goToIndex(scenes.length - 1);
+    worldModeBtnEl.disabled = false;
+    // Permanent world placement is assigned the moment a scene is known,
+    // regardless of which mode is active — so a memory's spot never shifts.
+    fresh.forEach(assignWorldPosition);
+
+    if (worldMode) {
+      // Add newly-arrived memories straight into the world, in place,
+      // without disturbing whatever's already there or anyone exploring it.
+      for (const s of fresh) {
+        if (!viewer) break;
+        try {
+          await withLoadRetry(() => viewer.addSplatScene(s.ply_url, {
+            format: GaussianSplats3D.SceneFormat.Ply,
+            splatAlphaRemovalThreshold: 5,
+            position: worldPositions.get(s.id),
+            showLoadingUI: false,
+          }));
+        } catch (err) {
+          console.error("Failed adding new memory to the world:", err);
+        }
+      }
+    } else if (!started) {
+      started = true;
+      goToIndex(0);
+    } else {
+      goToIndex(scenes.length - 1);
+    }
   } catch (err) {
     clearTimeout(errorTimer);
     connectionEl.dataset.state = "error";
@@ -619,7 +921,32 @@ async function pollSelection() {
       await poll();
       index = scenes.findIndex(s => s.id === scene_id);
     }
-    if (index !== -1) goToIndex(index);
+    if (index === -1) return;
+
+    if (worldMode) {
+      // Same remote-select gesture, but inside the world it flies the
+      // camera to that memory's spot instead of switching the single scene.
+      const pos = worldPositions.get(scenes[index].id);
+      if (pos) flyToScene(pos);
+    } else {
+      goToIndex(index);
+    }
+  } catch { /* ignore */ }
+}
+
+let lastWorldSelectionAt = 0;
+
+// Mobile app multi-selects which memories to place in Memory Verse, then
+// calls /api/world-selection — this is what actually enters/rebuilds the
+// world with exactly that set, on whichever screen the viewer is open.
+async function pollWorldSelection() {
+  try {
+    const res = await fetch("/api/world-selection", { cache: "no-store" });
+    if (!res.ok) return;
+    const { scene_ids, selected_at } = await res.json();
+    if (!scene_ids?.length || !selected_at || selected_at <= lastWorldSelectionAt) return;
+    lastWorldSelectionAt = selected_at;
+    buildWorldMode(scene_ids);
   } catch { /* ignore */ }
 }
 
@@ -768,6 +1095,7 @@ poll();
 const _pollId      = setInterval(poll, POLL_INTERVAL);
 const _statusId    = setInterval(pollStatus, STATUS_INTERVAL);
 const _selectionId = setInterval(pollSelection, 2_000);  // snappier than POLL_INTERVAL — this is a direct user action
+const _worldSelectionId = setInterval(pollWorldSelection, 2_000);
 
 // A dev-server hot-reload of this module without a full page reload would
 // otherwise leave the old poll/select/status intervals running alongside
@@ -779,5 +1107,6 @@ if (import.meta.hot) {
     clearInterval(_pollId);
     clearInterval(_statusId);
     clearInterval(_selectionId);
+    clearInterval(_worldSelectionId);
   });
 }

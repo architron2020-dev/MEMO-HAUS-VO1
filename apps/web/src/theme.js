@@ -70,7 +70,29 @@ export function initSplash() {
   const splash = document.getElementById("app-splash");
   const btn = document.getElementById("splash-start-btn");
   if (!splash || !btn) return;
-  btn.addEventListener("click", () => splash.classList.add("hidden"));
+  btn.addEventListener("click", () => {
+    splash.classList.add("hidden");
+    // Must happen inside this click handler — fullscreen requests are only
+    // honoured directly off a user gesture. Some mobile browsers (notably
+    // iOS Safari) don't support it at all, so a rejection here is expected
+    // and harmless; the app works the same either way.
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  });
+}
+
+// Manual fullscreen toggle — a fallback for when the splash auto-request
+// didn't fire (browser doesn't support it, or the visitor exited fullscreen
+// later and wants back in).
+export function initFullscreenToggle() {
+  const btn = document.getElementById("fullscreen-toggle-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    }
+  });
 }
 
 // Tap/click feedback sound — a tiny synthesized "tick", not an audio file,
