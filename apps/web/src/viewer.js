@@ -935,6 +935,7 @@ async function pollSelection() {
 }
 
 let lastWorldSelectionAt = 0;
+let worldSelectionBaselined = false;
 
 // Mobile app multi-selects which memories to place in Memory Verse, then
 // calls /api/world-selection — this is what actually enters/rebuilds the
@@ -944,6 +945,20 @@ async function pollWorldSelection() {
     const res = await fetch("/api/world-selection", { cache: "no-store" });
     if (!res.ok) return;
     const { scene_ids, selected_at } = await res.json();
+
+    // The very first check just records whatever's already sitting on the
+    // server (e.g. left over from an earlier session) as the baseline,
+    // instead of treating it as a brand-new request — without this, the
+    // viewer would jump straight into Memory Verse on every page load
+    // whenever someone had used the mobile selector previously. Every
+    // viewer always starts on the normal single-scene rotation; only a
+    // selection made *after* this point should ever open the world.
+    if (!worldSelectionBaselined) {
+      worldSelectionBaselined = true;
+      lastWorldSelectionAt = selected_at || 0;
+      return;
+    }
+
     if (!scene_ids?.length || !selected_at || selected_at <= lastWorldSelectionAt) return;
     lastWorldSelectionAt = selected_at;
     buildWorldMode(scene_ids);

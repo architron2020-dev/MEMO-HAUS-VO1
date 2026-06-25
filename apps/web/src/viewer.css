@@ -60,11 +60,13 @@ html, body {
   inset: 0;
   z-index: 5;
   pointer-events: none;
+  /* Slight, not overdone — just enough to soften the corners and frame the
+     scene a touch, well short of the heavy dark-edge look this used to be. */
   background: radial-gradient(
     ellipse 80% 80% at 50% 50%,
-    transparent 40%,
-    rgba(0, 0, 0, 0.45) 75%,
-    rgba(0, 0, 0, 0.85) 100%
+    transparent 55%,
+    rgba(0, 0, 0, 0.18) 85%,
+    rgba(0, 0, 0, 0.32) 100%
   );
   /* Only makes sense as a cinematic edge-darken against a black backdrop —
      in light mode it just reads as a stray grey cloud, so it's switched
