@@ -64,11 +64,8 @@ let storyOverlayTimer = null;
 // next free slot instead of needing the whole field rearranged. ────────────
 
 let worldMode = false;
-// Scenes render at the same scale as the normal single-scene view (camera
-// sits ~3 units away there) — 6 units of clearance is already well past
-// that, so neighbours never overlap, without pushing them off into the
-// distance where they'd be imperceptibly small.
-const WORLD_SPACING = 6;
+let worldScenes = []; // scenes currently loaded in Memory Verse (may be a subset)
+const WORLD_SPACING = 14; // generous gap so large splat extents never bleed into each other
 const worldPositions = new Map(); // scene id -> [x, y, z]
 let worldPlacementCount = 0;
 
@@ -478,6 +475,7 @@ viewerEl.addEventListener("pointerup", e => {
     if (worldMode) {
       const target = findNearestWorldScene(e.clientX, e.clientY);
       if (target) flyToScene(target);
+      else flyToWorldOverview(); // lost in navigation → snap back to overview
     } else {
       resetCamera();
     }
@@ -596,6 +594,72 @@ function flyToScene(targetPos) {
   resetRaf = requestAnimationFrame(tick);
 }
 
+// Computes a camera position/angle that frames all currently-placed Memory
+// Verse scenes in one overview shot. Falls back gracefully when no scenes
+// are placed yet or the world set is empty.
+function worldOverviewPos() {
+  const positions = worldScenes.length
+    ? worldScenes.map(s => worldPositions.get(s.id)).filter(Boolean)
+    : [...worldPositions.values()];
+
+  if (positions.length === 0) return { x: 0, y: 0, z: -8, yaw: 0, pitch: 0.1 };
+
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [px, , pz] of positions) {
+    if (px < minX) minX = px;
+    if (px > maxX) maxX = px;
+    if (pz < minZ) minZ = pz;
+    if (pz > maxZ) maxZ = pz;
+  }
+  const cx = (minX + maxX) / 2;
+  const cz = (minZ + maxZ) / 2;
+  const spread = Math.max(maxX - minX, maxZ - minZ);
+  // Pull back far enough to see the whole spread; minimum 8 units.
+  const pullback = Math.max(spread * 0.7 + WORLD_SPACING * 0.5, 8);
+  return { x: cx, y: 0, z: cz - pullback, yaw: 0, pitch: 0.1 };
+}
+
+// Smoothly fly to the world overview — used as the Memory Verse "reset"
+// when a click lands on empty space (mirrors resetCamera for single scenes).
+function flyToWorldOverview() {
+  if (!viewer?.camera) return;
+  if (resetRaf) cancelAnimationFrame(resetRaf);
+
+  const cam = viewer.camera;
+  const sp = { x: cam.position.x, y: cam.position.y, z: cam.position.z };
+  const { x: ex, y: ey, z: ez, yaw: ty, pitch: tp } = worldOverviewPos();
+  const ep = { x: ex, y: ey, z: ez };
+
+  const sy = _yaw, sp2 = _pitch;
+  let yawDelta = ty - sy;
+  yawDelta = ((yawDelta + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+
+  const t0 = performance.now();
+  const DUR = 1100;
+
+  const tick = now => {
+    const raw  = Math.min((now - t0) / DUR, 1);
+    const ease = 1 - Math.pow(1 - raw, 3);
+
+    cam.position.x = sp.x + (ep.x - sp.x) * ease;
+    cam.position.y = sp.y + (ep.y - sp.y) * ease;
+    cam.position.z = sp.z + (ep.z - sp.z) * ease;
+
+    _yaw   = sy  + yawDelta * ease;
+    _pitch = sp2 + (tp - sp2) * ease;
+    applyFPSCamera();
+
+    if (raw < 1) {
+      resetRaf = requestAnimationFrame(tick);
+    } else {
+      _yaw = ty; _pitch = tp;
+      applyFPSCamera();
+      resetRaf = null;
+    }
+  };
+  resetRaf = requestAnimationFrame(tick);
+}
+
 // Projects a world position to on-screen pixel coordinates, using the
 // viewer's own camera/canvas — used to find which scene a click landed near.
 function projectToScreen(worldPos) {
@@ -639,6 +703,7 @@ function buildWorldMode(sceneIds) {
     ? scenes.filter(s => sceneIds.includes(s.id))
     : scenes;
   if (targetScenes.length === 0) return;
+  worldScenes = targetScenes;
 
   const wasAlreadyIn = worldMode;
   worldMode = true;
@@ -690,9 +755,13 @@ function buildWorldMode(sceneIds) {
       // the visitor wait for all of them — the rest populate live.
       if (loadedCount === 1) {
         if (viewer?.camera) {
-          viewer.camera.position.set(0, 0, -4.5);
-          _yaw = 0;
-          _pitch = 0.15;
+          // Place camera at a computed overview position so all selected
+          // scenes are in view — not a hardcoded origin that ignores where
+          // the spiral actually placed the chosen subset.
+          const { x, y, z, yaw, pitch } = worldOverviewPos();
+          viewer.camera.position.set(x, y, z);
+          _yaw = yaw;
+          _pitch = pitch;
           applyFPSCamera();
         }
         overlayEl.style.transition = "opacity 1200ms ease-in";
@@ -713,6 +782,7 @@ function enterWorldMode() {
 function exitWorldMode() {
   if (!worldMode) return;
   worldMode = false;
+  worldScenes = [];
   worldModeBtnEl.textContent = "Enter Memory Verse";
   worldModeBtnEl.classList.remove("active");
 
