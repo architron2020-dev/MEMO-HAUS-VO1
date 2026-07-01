@@ -95,6 +95,42 @@ export function initFullscreenToggle() {
   });
 }
 
+const FS_KEY = "memo-fullscreen";
+
+// Persist fullscreen across page navigations. Call on every page.
+// When the user enters fullscreen, the preference is saved; when they exit
+// via ESC or the toggle button it is cleared. On pages without a splash,
+// the first tap the visitor makes will restore fullscreen automatically.
+export function initFullscreenPersistence() {
+  // Distinguish navigation-triggered exit from user-triggered exit.
+  // When the user navigates away the browser exits fullscreen automatically
+  // (pagehide fires first), so we must NOT clear the pref in that case.
+  let navigating = false;
+  window.addEventListener("pagehide", () => { navigating = true; });
+
+  document.addEventListener("fullscreenchange", () => {
+    if (document.fullscreenElement) {
+      localStorage.setItem(FS_KEY, "1");
+    } else if (!navigating) {
+      // User intentionally exited (ESC or toggle button) — forget the pref.
+      localStorage.removeItem(FS_KEY);
+    }
+  });
+
+  if (localStorage.getItem(FS_KEY) !== "1") return;
+  if (document.fullscreenElement) return;
+
+  // Try immediately — works on some Android Chrome builds after a
+  // same-origin fullscreen navigation; silently fails elsewhere.
+  document.documentElement.requestFullscreen?.().catch(() => {});
+
+  // Reliable fallback: restore on the very first tap on this page,
+  // which is always a genuine user gesture the browser will honour.
+  document.addEventListener("click", function restore() {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  }, { once: true, capture: true });
+}
+
 // Tap/click feedback sound — a tiny synthesized "tick", not an audio file,
 // so there's nothing to load or fail to load. AudioContext can't start
 // until a user gesture happens anyway, which a click already is, so it's

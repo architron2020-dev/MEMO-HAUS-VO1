@@ -1,9 +1,10 @@
 import "./contribute.css";
-import { initThemeToggle, initCursor, initTapSounds } from "./theme.js";
+import { initThemeToggle, initCursor, initTapSounds, initFullscreenPersistence } from "./theme.js";
 
 initThemeToggle();
 initCursor();
 initTapSounds();
+initFullscreenPersistence();
 
 // ── DOM refs ────────────────────────────────────────────────────────────
 
