@@ -19,6 +19,7 @@ const loaderEl           = document.getElementById("processing-loader");
 const timerArcEl         = document.getElementById("timer-arc");
 const storyOverlayEl     = document.getElementById("story-overlay");
 const overlayStoryTextEl = document.getElementById("overlay-story-text");
+// sceneAudioEl kept in DOM but audio is now routed through Web Audio for spatialization
 const sceneAudioEl       = document.getElementById("scene-audio");
 const cursorReticleEl    = document.getElementById("cursor-reticle");
 const navHintTabEl       = document.getElementById("nav-hint-tab");
@@ -26,6 +27,107 @@ const navHintPanelEl     = document.getElementById("nav-hint-panel");
 const navHintCloseEl     = document.getElementById("nav-hint-close");
 const worldModeBtnEl     = document.getElementById("world-mode-btn");
 const worldDebugEl       = document.getElementById("world-debug");
+
+// ── Spatial audio ─────────────────────────────────────────────────────────
+// Uses the Web Audio API PannerNode so volume fades with distance and the
+// stereo pan tracks which direction each scene is relative to where the
+// camera is pointing — moving toward a memory makes it louder and centered,
+// turning your head left/right shifts it in the headphones / speakers.
+
+let _audioCtx = null;
+const _audioBufferCache = new Map(); // url → Promise<AudioBuffer>
+const _activeSources    = new Map(); // sceneId → { source, panner }
+
+function getAudioCtx() {
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (_audioCtx.state === "suspended") _audioCtx.resume().catch(() => {});
+  return _audioCtx;
+}
+
+function _fetchAudioBuffer(url) {
+  if (_audioBufferCache.has(url)) return _audioBufferCache.get(url);
+  const p = fetch(url)
+    .then(r => r.arrayBuffer())
+    .then(ab => getAudioCtx().decodeAudioData(ab))
+    .catch(err => { console.error("Audio decode error:", err); return null; });
+  _audioBufferCache.set(url, p);
+  return p;
+}
+
+function stopSceneAudio(sceneId) {
+  const entry = _activeSources.get(sceneId);
+  if (!entry) return;
+  try { entry.source.stop(); } catch {}
+  try { entry.panner.disconnect(); } catch {}
+  _activeSources.delete(sceneId);
+}
+
+function stopAllAudio() {
+  for (const id of [..._activeSources.keys()]) stopSceneAudio(id);
+  sceneAudioEl.pause(); // ensure the legacy element is also silent
+}
+
+async function playSceneAudio(scene, worldPos) {
+  if (!scene.audio_url) return;
+  stopSceneAudio(scene.id);
+
+  const ctx = getAudioCtx();
+  const buf = await _fetchAudioBuffer(scene.audio_url);
+  if (!buf) return;
+
+  const panner = ctx.createPanner();
+  panner.panningModel  = "HRTF";      // full 3-D ear-model panning
+  panner.distanceModel = "inverse";   // volume ∝ 1/distance
+  panner.refDistance   = 3;           // full volume when 3 units away
+  panner.maxDistance   = 80;          // silent beyond this (won't drop further)
+  panner.rolloffFactor = 1.2;         // how steeply volume falls off
+  panner.coneOuterGain = 1;           // omnidirectional source
+
+  // Place the audio source at the scene's world position
+  if (panner.positionX) {
+    panner.positionX.value = worldPos[0];
+    panner.positionY.value = worldPos[1];
+    panner.positionZ.value = worldPos[2];
+  } else {
+    panner.setPosition(worldPos[0], worldPos[1], worldPos[2]);
+  }
+
+  const source = ctx.createBufferSource();
+  source.buffer = buf;
+  source.loop   = true;
+  source.connect(panner);
+  panner.connect(ctx.destination);
+  source.start();
+
+  _activeSources.set(scene.id, { source, panner });
+}
+
+// Called every frame from flyLoop to track camera position + orientation.
+// The browser then computes all distance-based volume and stereo panning
+// automatically through the connected PannerNodes.
+function updateAudioListener() {
+  const ctx = _audioCtx;
+  const cam = viewer?.camera;
+  if (!ctx || !cam || ctx.state !== "running") return;
+
+  const { x, y, z } = cam.position;
+  const m = cam.matrixWorld.elements;
+  const fwdX = -m[8], fwdY = -m[9], fwdZ = -m[10]; // camera look direction
+  const upX  =  m[4], upY  =  m[5], upZ  =  m[6];   // camera up direction
+
+  const L = ctx.listener;
+  if (L.positionX) {
+    // Modern AudioParam-based API
+    L.positionX.value = x;   L.positionY.value = y;   L.positionZ.value = z;
+    L.forwardX.value  = fwdX; L.forwardY.value = fwdY; L.forwardZ.value  = fwdZ;
+    L.upX.value  = upX;  L.upY.value  = upY;  L.upZ.value  = upZ;
+  } else {
+    L.setPosition(x, y, z);
+    L.setOrientation(fwdX, fwdY, fwdZ, upX, upY, upZ);
+  }
+}
 
 // Temporary — writes status directly into the page since the browser
 // console isn't always at hand while testing on the kiosk display itself.
@@ -65,7 +167,8 @@ let storyOverlayTimer = null;
 
 let worldMode = false;
 let worldScenes = []; // scenes currently loaded in Memory Verse (may be a subset)
-const WORLD_SPACING = 14; // generous gap so large splat extents never bleed into each other
+let worldLoadedOrder = []; // scene ids in the same order they were added to the viewer (index = viewer scene index)
+const WORLD_SPACING = 50; // wide enough that even large splat extents never bleed into each other
 const worldPositions = new Map(); // scene id -> [x, y, z]
 let worldPlacementCount = 0;
 
@@ -257,16 +360,10 @@ async function showHud(scene, onDwellEnd) {
   captionStoryEl.textContent = "";
   hudEl.classList.remove("hidden");
 
-  // Per-scene voice note / music clip — loops for as long as the memory is
-  // on screen, stopped in hideHud() when the next scene transitions in.
-  sceneAudioEl.pause();
-  if (scene.audio_url) {
-    sceneAudioEl.src = scene.audio_url;
-    sceneAudioEl.currentTime = 0;
-    sceneAudioEl.play().catch(() => { /* blocked until a user gesture — fine, kiosk already has one */ });
-  } else {
-    sceneAudioEl.removeAttribute("src");
-  }
+  // Per-scene audio — played spatially: single scenes are always at world
+  // origin [0,0,0], so the sound comes from directly ahead of the camera.
+  stopAllAudio();
+  playSceneAudio(scene, [0, 0, 0]);
 
   const c1 = typewrite(captionNameEl, (scene.name || "Untitled").toUpperCase(), 55);
   cancelTypewriters.push(c1);
@@ -328,7 +425,7 @@ function hideHud() {
   hudEl.classList.add("hidden");
   storyOverlayEl.classList.add("hidden");
   if (storyOverlayTimer) { clearTimeout(storyOverlayTimer); storyOverlayTimer = null; }
-  sceneAudioEl.pause();
+  stopAllAudio();
 }
 
 // ── Dwell timer ───────────────────────────────────────────────────────────
@@ -469,13 +566,15 @@ viewerEl.addEventListener("pointermove", e => {
 
 viewerEl.addEventListener("pointerup", e => {
   if (_dragDist < 6) {
-    // Clean tap/click, not a drag-look. In the World of Memories, that
-    // means "fly to whichever memory I tapped near"; otherwise it's the
-    // original single-scene reset-to-origin.
-    if (worldMode) {
+    if (worldMode && gumballMode) {
+      // Gumball mode: tap selects the nearest scene for moving
+      const nearest = findNearestWorldSceneAndId(e.clientX, e.clientY);
+      if (nearest) selectGumballScene(nearest.id);
+      else deselectGumball();
+    } else if (worldMode) {
       const target = findNearestWorldScene(e.clientX, e.clientY);
       if (target) flyToScene(target);
-      else flyToWorldOverview(); // lost in navigation → snap back to overview
+      else flyToWorldOverview();
     } else {
       resetCamera();
     }
@@ -691,6 +790,20 @@ function findNearestWorldScene(clickX, clickY) {
   return bestDist <= WORLD_CLICK_RADIUS_PX ? best : null;
 }
 
+// Same as findNearestWorldScene but returns { pos, id } for gumball use.
+function findNearestWorldSceneAndId(clickX, clickY) {
+  let best = null, bestDist = Infinity;
+  for (const scene of scenes) {
+    const pos = worldPositions.get(scene.id);
+    if (!pos) continue;
+    const screen = projectToScreen(pos);
+    if (!screen) continue;
+    const d = Math.hypot(screen.x - clickX, screen.y - clickY);
+    if (d < bestDist) { bestDist = d; best = { pos, id: scene.id }; }
+  }
+  return bestDist <= WORLD_CLICK_RADIUS_PX ? best : null;
+}
+
 // ── World of Memories — enter / exit ────────────────────────────────────────
 
 // sceneIds: optional explicit subset (from the mobile app's multi-select).
@@ -707,8 +820,10 @@ function buildWorldMode(sceneIds) {
 
   const wasAlreadyIn = worldMode;
   worldMode = true;
+  worldLoadedOrder = [];
   worldModeBtnEl.textContent = "Exit Memory Verse";
   worldModeBtnEl.classList.add("active");
+  gumballBtnEl.classList.remove("hidden");
   stopDwell();
   hideHud();
 
@@ -746,6 +861,7 @@ function buildWorldMode(sceneIds) {
           position,
         }));
         loadedCount++;
+        worldLoadedOrder.push(s.id);
         worldLog(`${loadedCount}/${targetScenes.length} — ${label}`);
       } catch (err) {
         worldLog(`Skipped "${label}" (failed to load)`);
@@ -771,6 +887,13 @@ function buildWorldMode(sceneIds) {
     }
     worldLog(`All ${loadedCount} memories are in the world.`);
     setTimeout(() => worldDebugEl.classList.add("hidden"), 1800);
+
+    // Start spatial audio for every scene that has one — each plays from
+    // its own world position, so proximity and head-turn drive volume/pan.
+    for (const s of targetScenes) {
+      const pos = worldPositions.get(s.id) || [0, 0, 0];
+      playSceneAudio(s, pos);
+    }
   });
 }
 
@@ -783,6 +906,12 @@ function exitWorldMode() {
   if (!worldMode) return;
   worldMode = false;
   worldScenes = [];
+  worldLoadedOrder = [];
+  gumballMode = false;
+  deselectGumball();
+  gumballBtnEl.classList.add("hidden");
+  gumballBtnEl.classList.remove("active");
+  stopAllAudio();
   worldModeBtnEl.textContent = "Enter Memory Verse";
   worldModeBtnEl.classList.remove("active");
 
@@ -1083,6 +1212,157 @@ document.addEventListener("keydown", e => {
   if (e.code === "KeyF") toggleFullscreen();
 });
 
+// ── Gumball — scene position tool ────────────────────────────────────────
+// Active only while Memory Verse is open. Clicking the ⊕ MOVE button enters
+// move mode; tapping a scene selects it; dragging the red X or blue Z handle
+// repositions that scene. On drag-end the scene is removed and re-added at
+// the new position so the GPU data is rebuilt correctly.
+
+const gumballBtnEl     = document.getElementById("gumball-btn");
+const gumballOverlayEl = document.getElementById("gumball-overlay");
+const gumballCenterEl  = document.getElementById("gumball-center");
+const gumballXEl       = document.getElementById("gumball-x-handle");
+const gumballZEl       = document.getElementById("gumball-z-handle");
+const gumballLabelEl   = document.getElementById("gumball-label");
+
+let gumballMode         = false;
+let gumballSelectedId   = null;   // scene id currently being moved
+let gumballDragAxis     = null;   // "x" | "z" | null
+let gumballDragStart    = null;   // { clientX, clientY }
+let gumballDragOrigin   = null;   // original [x,y,z] before this drag
+
+// Pixels-to-world-units scale at the distance of the selected scene.
+function screenToWorldScale(worldPos) {
+  if (!viewer?.camera) return 0.02;
+  const cam = viewer.camera;
+  const dist = Math.hypot(
+    cam.position.x - worldPos[0],
+    cam.position.y - worldPos[1],
+    cam.position.z - worldPos[2]
+  );
+  const fovRad = ((cam.fov || 75) * Math.PI) / 180;
+  const focalPx = (viewerEl.clientHeight / 2) / Math.tan(fovRad / 2);
+  return dist / focalPx;
+}
+
+function deselectGumball() {
+  gumballSelectedId = null;
+  gumballOverlayEl.classList.add("hidden");
+}
+
+function selectGumballScene(sceneId) {
+  const scene = worldScenes.find(s => s.id === sceneId);
+  if (!scene) return;
+  gumballSelectedId = sceneId;
+  gumballLabelEl.textContent = (scene.name || "Untitled").toUpperCase();
+  gumballOverlayEl.classList.remove("hidden");
+}
+
+// Updates handle screen positions every frame while gumball is active.
+function updateGumballOverlay() {
+  if (!gumballMode || !gumballSelectedId || !worldMode) return;
+  const pos = worldPositions.get(gumballSelectedId);
+  if (!pos) return;
+  const screen = projectToScreen(pos);
+  if (!screen) { gumballOverlayEl.classList.add("hidden"); return; }
+  gumballOverlayEl.classList.remove("hidden");
+
+  const HANDLE_OFFSET = 72; // px from center to each axis handle
+  gumballCenterEl.style.cssText = `left:${screen.x}px;top:${screen.y}px`;
+  gumballXEl.style.cssText      = `left:${screen.x + HANDLE_OFFSET}px;top:${screen.y}px`;
+  gumballZEl.style.cssText      = `left:${screen.x}px;top:${screen.y - HANDLE_OFFSET}px`;
+  gumballLabelEl.style.cssText  = `left:${screen.x}px;top:${screen.y}px`;
+}
+
+// After a drag ends, remove the scene at its old viewer index and re-add
+// at the updated worldPosition — the only reliable way to move a loaded splat.
+async function commitGumballMove() {
+  if (!gumballSelectedId) return;
+  const id    = gumballSelectedId;
+  const scene = worldScenes.find(s => s.id === id);
+  if (!scene) return;
+
+  const newPos    = worldPositions.get(id);
+  const vIndex    = worldLoadedOrder.indexOf(id);
+  if (vIndex === -1) return;
+
+  await runExclusive(async () => {
+    try {
+      await withLoadRetry(() => viewer.removeSplatScenes([vIndex], false));
+      worldLoadedOrder.splice(vIndex, 1);
+    } catch (err) { console.error("Gumball remove failed:", err); return; }
+
+    try {
+      await withLoadRetry(() => viewer.addSplatScene(scene.ply_url, {
+        format: GaussianSplats3D.SceneFormat.Ply,
+        splatAlphaRemovalThreshold: 5,
+        showLoadingUI: false,
+        position: newPos,
+      }));
+      worldLoadedOrder.push(id);
+    } catch (err) { console.error("Gumball re-add failed:", err); }
+  });
+}
+
+// ── Handle drag listeners ──────────────────────────────────────────────────
+
+function startHandleDrag(axis, e) {
+  e.stopPropagation();
+  if (!gumballSelectedId) return;
+  gumballDragAxis  = axis;
+  gumballDragStart = { x: e.clientX, y: e.clientY };
+  gumballDragOrigin = [...(worldPositions.get(gumballSelectedId) || [0,0,0])];
+  e.currentTarget.setPointerCapture(e.pointerId);
+}
+
+function onHandlePointerMove(e) {
+  if (!gumballDragAxis || !gumballSelectedId) return;
+  if (!viewer?.camera) return;
+
+  const dx = e.clientX - gumballDragStart.x;
+  const dy = e.clientY - gumballDragStart.y;
+  const scale = screenToWorldScale(worldPositions.get(gumballSelectedId));
+  const m = viewer.camera.matrixWorld.elements;
+
+  if (gumballDragAxis === "x") {
+    // Map screen-X drag → world movement along the camera's right vector
+    const rightX = m[0], rightZ = m[2];
+    worldPositions.set(gumballSelectedId, [
+      gumballDragOrigin[0] + dx * scale * rightX,
+      gumballDragOrigin[1],
+      gumballDragOrigin[2] + dx * scale * rightZ,
+    ]);
+  } else {
+    // Map screen-Y drag (up = forward) → world movement along camera's forward vector
+    const fwdX = -m[8], fwdZ = -m[10];
+    worldPositions.set(gumballSelectedId, [
+      gumballDragOrigin[0] + (-dy) * scale * fwdX,
+      gumballDragOrigin[1],
+      gumballDragOrigin[2] + (-dy) * scale * fwdZ,
+    ]);
+  }
+}
+
+function onHandlePointerUp() {
+  if (!gumballDragAxis) return;
+  gumballDragAxis = null;
+  commitGumballMove();
+}
+
+[gumballXEl, gumballZEl].forEach(el => {
+  el.addEventListener("pointerdown", e => startHandleDrag(el.dataset.axis, e));
+  el.addEventListener("pointermove", onHandlePointerMove);
+  el.addEventListener("pointerup",   onHandlePointerUp);
+  el.addEventListener("pointercancel", onHandlePointerUp);
+});
+
+gumballBtnEl.addEventListener("click", () => {
+  if (!worldMode) return;
+  gumballMode = !gumballMode;
+  gumballBtnEl.classList.toggle("active", gumballMode);
+  if (!gumballMode) deselectGumball();
+});
+
 // ── Keyboard fly navigation ───────────────────────────────────────────────
 
 const _keys = new Set();
@@ -1099,6 +1379,8 @@ const TURN_SPEED = 0.032;  // radians per frame (~110°/sec at 60fps)
 
 function flyLoop() {
   requestAnimationFrame(flyLoop);
+  updateAudioListener();
+  updateGumballOverlay();
   if (!viewer || _keys.size === 0) return;
 
   const cam = viewer.camera;
