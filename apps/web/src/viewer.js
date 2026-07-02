@@ -191,46 +191,48 @@ let errorTimer    = null;
 let resetRaf      = null;
 let storyOverlayTimer = null;
 
-// ── World of Memories — every scene loaded at once, spread apart in a
-// permanent, ever-expanding spiral so new memories just keep finding the
-// next free slot instead of needing the whole field rearranged. ────────────
+// ── World of Memories ─────────────────────────────────────────────────────
 
 let worldMode = false;
-let worldScenes = []; // scenes currently loaded in Memory Verse (may be a subset)
-let worldLoadedOrder = []; // scene ids in the same order they were added to the viewer (index = viewer scene index)
-const WORLD_SPACING = 50; // wide enough that even large splat extents never bleed into each other
-const worldPositions = new Map(); // scene id -> [x, y, z]
-let worldPlacementCount = 0;
+let worldScenes    = [];  // scenes currently in Memory Verse (may be a subset)
+let worldLoadedOrder = []; // scene ids ordered by viewer scene index
+let worldFocusedId = null; // which scene's audio is currently active
 
-// Square (Ulam-style) spiral: index 0 at the centre, each ring one step
-// further out — grows forever without ever revisiting or overlapping a cell.
-function spiralCoord(i) {
-  if (i === 0) return [0, 0];
-  let x = 0, y = 0;
-  let dx = 1, dy = 0;
-  let segmentLength = 1, segmentPassed = 0, legsInRing = 0;
-  for (let n = 0; n < i; n++) {
-    x += dx; y += dy;
-    segmentPassed++;
-    if (segmentPassed === segmentLength) {
-      segmentPassed = 0;
-      [dx, dy] = [-dy, dx];
-      legsInRing++;
-      if (legsInRing % 2 === 0) segmentLength++;
-    }
-  }
-  return [x, y];
+const WORLD_SPACING = 55;  // X-gap between scenes (units); all scenes placed in a row at Z=0
+const worldPositions = new Map(); // scene id → [x, y, z]
+
+// Places targetScenes in a centred horizontal row (X axis only, Z=0).
+// 2 scenes → [-27.5, 0, 0] and [27.5, 0, 0]
+// 3 scenes → [-55, 0, 0], [0, 0, 0], [55, 0, 0] … etc.
+// Called every time Memory Verse is (re)built so positions always match the
+// current subset and the user never sees Z-depth stacking.
+function assignWorldPositionsLinear(targetScenes) {
+  const N = targetScenes.length;
+  const totalWidth = (N - 1) * WORLD_SPACING;
+  targetScenes.forEach((s, i) => {
+    worldPositions.set(s.id, [-totalWidth / 2 + i * WORLD_SPACING, 0, 0]);
+  });
 }
 
-// Assigns a scene its permanent grid slot the first time it's seen — once
-// set, a memory's place in the world never moves again, in this mode or out
-// of it, so revisiting the world later still finds everything where it was.
+// Fallback for scenes not in the current Memory Verse subset (e.g. freshly
+// uploaded while Memory Verse is already open) — park them off to the right.
+let _fallbackCount = 0;
 function assignWorldPosition(scene) {
   if (worldPositions.has(scene.id)) return worldPositions.get(scene.id);
-  const [gx, gy] = spiralCoord(worldPlacementCount++);
-  const pos = [gx * WORLD_SPACING, 0, gy * WORLD_SPACING];
+  const pos = [1000 + _fallbackCount++ * WORLD_SPACING, 0, 0];
   worldPositions.set(scene.id, pos);
   return pos;
+}
+
+// Switch which scene is "focused" in Memory Verse: fly the camera to it,
+// stop all audio, then start only that scene's audio with adaptive intensity.
+function focusWorldScene(sceneId, worldPos) {
+  flyToScene(worldPos);
+  if (worldFocusedId === sceneId) return;
+  worldFocusedId = sceneId;
+  stopAllAudio();
+  const scene = worldScenes.find(s => s.id === sceneId);
+  if (scene) playSceneAudio(scene, worldPos);
 }
 
 let chain = Promise.resolve();
@@ -602,8 +604,8 @@ viewerEl.addEventListener("pointerup", e => {
       if (nearest) selectGumballScene(nearest.id);
       else deselectGumball();
     } else if (worldMode) {
-      const target = findNearestWorldScene(e.clientX, e.clientY);
-      if (target) flyToScene(target);
+      const target = findNearestWorldSceneAndId(e.clientX, e.clientY);
+      if (target) focusWorldScene(target.id, target.pos);
       else flyToWorldOverview();
     } else {
       resetCamera();
@@ -723,29 +725,26 @@ function flyToScene(targetPos) {
   resetRaf = requestAnimationFrame(tick);
 }
 
-// Computes a camera position/angle that frames all currently-placed Memory
-// Verse scenes in one overview shot. Falls back gracefully when no scenes
-// are placed yet or the world set is empty.
+// Computes a camera position that frames the entire Memory Verse row.
+// All scenes are on the X axis at Z=0, so the camera just needs to pull
+// back along -Z far enough to fit the total width in the FOV.
 function worldOverviewPos() {
   const positions = worldScenes.length
     ? worldScenes.map(s => worldPositions.get(s.id)).filter(Boolean)
     : [...worldPositions.values()];
 
-  if (positions.length === 0) return { x: 0, y: 0, z: -8, yaw: 0, pitch: 0.1 };
+  if (positions.length === 0) return { x: 0, y: 0, z: -30, yaw: 0, pitch: 0.05 };
 
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const [px, , pz] of positions) {
+  let minX = Infinity, maxX = -Infinity;
+  for (const [px] of positions) {
     if (px < minX) minX = px;
     if (px > maxX) maxX = px;
-    if (pz < minZ) minZ = pz;
-    if (pz > maxZ) maxZ = pz;
   }
   const cx = (minX + maxX) / 2;
-  const cz = (minZ + maxZ) / 2;
-  const spread = Math.max(maxX - minX, maxZ - minZ);
-  // Pull back far enough to see the whole spread; minimum 8 units.
-  const pullback = Math.max(spread * 0.7 + WORLD_SPACING * 0.5, 8);
-  return { x: cx, y: 0, z: cz - pullback, yaw: 0, pitch: 0.1 };
+  const totalWidth = maxX - minX;
+  // Pull back so the total span fits comfortably in a ~75° FOV with margin.
+  const pullback = Math.max(totalWidth / 1.1 + WORLD_SPACING * 0.7, 30);
+  return { x: cx, y: 0, z: -pullback, yaw: 0, pitch: 0.05 };
 }
 
 // Smoothly fly to the world overview — used as the Memory Verse "reset"
@@ -847,6 +846,10 @@ function buildWorldMode(sceneIds) {
     : scenes;
   if (targetScenes.length === 0) return;
   worldScenes = targetScenes;
+  worldFocusedId = null;
+
+  // Lay scenes out in a centred horizontal row — no Z-depth stacking.
+  assignWorldPositionsLinear(targetScenes);
 
   const wasAlreadyIn = worldMode;
   worldMode = true;
@@ -918,11 +921,11 @@ function buildWorldMode(sceneIds) {
     worldLog(`All ${loadedCount} memories are in the world.`);
     setTimeout(() => worldDebugEl.classList.add("hidden"), 1800);
 
-    // Start spatial audio for every scene that has one — each plays from
-    // its own world position, so proximity and head-turn drive volume/pan.
-    for (const s of targetScenes) {
-      const pos = worldPositions.get(s.id) || [0, 0, 0];
-      playSceneAudio(s, pos);
+    // Auto-focus the centre scene so audio starts immediately on entry.
+    const midScene = targetScenes[Math.floor(targetScenes.length / 2)];
+    if (midScene) {
+      worldFocusedId = midScene.id;
+      playSceneAudio(midScene, worldPositions.get(midScene.id) || [0, 0, 0]);
     }
   });
 }
@@ -937,6 +940,7 @@ function exitWorldMode() {
   worldMode = false;
   worldScenes = [];
   worldLoadedOrder = [];
+  worldFocusedId = null;
   gumballMode = false;
   deselectGumball();
   gumballBtnEl.classList.add("hidden");
@@ -1153,10 +1157,9 @@ async function pollSelection() {
     if (index === -1) return;
 
     if (worldMode) {
-      // Same remote-select gesture, but inside the world it flies the
-      // camera to that memory's spot instead of switching the single scene.
-      const pos = worldPositions.get(scenes[index].id);
-      if (pos) flyToScene(pos);
+      const s = scenes[index];
+      const pos = worldPositions.get(s.id);
+      if (pos) focusWorldScene(s.id, pos);
     } else {
       goToIndex(index);
     }
