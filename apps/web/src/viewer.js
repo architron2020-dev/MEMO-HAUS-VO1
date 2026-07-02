@@ -36,15 +36,20 @@ const worldDebugEl       = document.getElementById("world-debug");
 
 let _audioCtx = null;
 const _audioBufferCache = new Map(); // url → Promise<AudioBuffer>
-const _activeSources    = new Map(); // sceneId → { source, panner }
+// sceneId → { source, panner, gainNode, worldPos }
+const _activeSources = new Map();
 
 function getAudioCtx() {
   if (!_audioCtx) {
     _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
-  if (_audioCtx.state === "suspended") _audioCtx.resume().catch(() => {});
   return _audioCtx;
 }
+
+// Resume the context on any user gesture so audio can start on mobile.
+document.addEventListener("pointerdown", () => {
+  if (_audioCtx && _audioCtx.state === "suspended") _audioCtx.resume().catch(() => {});
+}, { passive: true });
 
 function _fetchAudioBuffer(url) {
   if (_audioBufferCache.has(url)) return _audioBufferCache.get(url);
@@ -61,12 +66,13 @@ function stopSceneAudio(sceneId) {
   if (!entry) return;
   try { entry.source.stop(); } catch {}
   try { entry.panner.disconnect(); } catch {}
+  try { entry.gainNode.disconnect(); } catch {}
   _activeSources.delete(sceneId);
 }
 
 function stopAllAudio() {
   for (const id of [..._activeSources.keys()]) stopSceneAudio(id);
-  sceneAudioEl.pause(); // ensure the legacy element is also silent
+  sceneAudioEl.pause();
 }
 
 async function playSceneAudio(scene, worldPos) {
@@ -74,18 +80,19 @@ async function playSceneAudio(scene, worldPos) {
   stopSceneAudio(scene.id);
 
   const ctx = getAudioCtx();
+  if (ctx.state === "suspended") await ctx.resume().catch(() => {});
+
   const buf = await _fetchAudioBuffer(scene.audio_url);
   if (!buf) return;
 
+  // PannerNode handles ONLY left/right angle panning — distance volume is
+  // driven manually below so every browser and audio type gets the same result.
   const panner = ctx.createPanner();
-  panner.panningModel  = "HRTF";      // full 3-D ear-model panning
-  panner.distanceModel = "inverse";   // volume ∝ 1/distance
-  panner.refDistance   = 3;           // full volume when 3 units away
-  panner.maxDistance   = 80;          // silent beyond this (won't drop further)
-  panner.rolloffFactor = 1.2;         // how steeply volume falls off
-  panner.coneOuterGain = 1;           // omnidirectional source
-
-  // Place the audio source at the scene's world position
+  panner.panningModel  = "equalpower"; // broadest device support for angle pan
+  panner.distanceModel = "linear";
+  panner.refDistance   = 1;
+  panner.maxDistance   = 1;           // distance rolloff disabled on panner
+  panner.rolloffFactor = 0;           // all volume control goes through gainNode
   if (panner.positionX) {
     panner.positionX.value = worldPos[0];
     panner.positionY.value = worldPos[1];
@@ -94,38 +101,61 @@ async function playSceneAudio(scene, worldPos) {
     panner.setPosition(worldPos[0], worldPos[1], worldPos[2]);
   }
 
+  // GainNode that we update every frame based on camera distance → smooth,
+  // dramatic intensity changes for voice, music, and background audio alike.
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = 1.0;
+
   const source = ctx.createBufferSource();
   source.buffer = buf;
   source.loop   = true;
   source.connect(panner);
-  panner.connect(ctx.destination);
+  panner.connect(gainNode);
+  gainNode.connect(ctx.destination);
   source.start();
 
-  _activeSources.set(scene.id, { source, panner });
+  _activeSources.set(scene.id, { source, panner, gainNode, worldPos: [...worldPos] });
 }
 
-// Called every frame from flyLoop to track camera position + orientation.
-// The browser then computes all distance-based volume and stereo panning
-// automatically through the connected PannerNodes.
-function updateAudioListener() {
-  const ctx = _audioCtx;
-  const cam = viewer?.camera;
-  if (!ctx || !cam || ctx.state !== "running") return;
+// ── Per-frame spatial audio update ────────────────────────────────────────
+// Updates listener orientation for L/R pan AND manually drives each source's
+// gain based on distance — this is what makes audio louder when you approach
+// and quieter as you walk away, for every audio type.
 
+const AUDIO_REF_DIST = 3;   // world units at which gain = 1.0 (full volume)
+const AUDIO_MAX_DIST = 70;  // world units at which gain reaches 0
+const AUDIO_SMOOTH   = 0.12; // AudioParam time-constant (seconds) for ramping
+
+function updateSpatialAudio() {
+  const cam = viewer?.camera;
+  if (!_audioCtx || !cam) return;
+
+  // Keep the context alive — resume if the browser suspended it
+  if (_audioCtx.state === "suspended") { _audioCtx.resume().catch(() => {}); return; }
+
+  // ── Listener position + orientation (drives L/R pan) ──────────────────
   const { x, y, z } = cam.position;
   const m = cam.matrixWorld.elements;
-  const fwdX = -m[8], fwdY = -m[9], fwdZ = -m[10]; // camera look direction
-  const upX  =  m[4], upY  =  m[5], upZ  =  m[6];   // camera up direction
-
-  const L = ctx.listener;
+  const fwdX = -m[8], fwdY = -m[9], fwdZ = -m[10];
+  const upX  =  m[4], upY  =  m[5], upZ  =  m[6];
+  const L = _audioCtx.listener;
   if (L.positionX) {
-    // Modern AudioParam-based API
-    L.positionX.value = x;   L.positionY.value = y;   L.positionZ.value = z;
-    L.forwardX.value  = fwdX; L.forwardY.value = fwdY; L.forwardZ.value  = fwdZ;
-    L.upX.value  = upX;  L.upY.value  = upY;  L.upZ.value  = upZ;
+    L.positionX.value = x;    L.positionY.value = y;    L.positionZ.value = z;
+    L.forwardX.value  = fwdX; L.forwardY.value  = fwdY; L.forwardZ.value  = fwdZ;
+    L.upX.value       = upX;  L.upY.value       = upY;  L.upZ.value       = upZ;
   } else {
     L.setPosition(x, y, z);
     L.setOrientation(fwdX, fwdY, fwdZ, upX, upY, upZ);
+  }
+
+  // ── Per-source distance gain (drives volume intensity) ─────────────────
+  const now = _audioCtx.currentTime;
+  for (const { gainNode, worldPos } of _activeSources.values()) {
+    const dist = Math.hypot(x - worldPos[0], y - worldPos[1], z - worldPos[2]);
+    // Inverse-power curve: full volume within REF_DIST, fades to ~0 at MAX_DIST
+    const clamped = Math.max(AUDIO_REF_DIST, Math.min(dist, AUDIO_MAX_DIST));
+    const gain    = Math.pow(AUDIO_REF_DIST / clamped, 1.6);
+    gainNode.gain.setTargetAtTime(gain, now, AUDIO_SMOOTH);
   }
 }
 
@@ -1379,7 +1409,7 @@ const TURN_SPEED = 0.032;  // radians per frame (~110°/sec at 60fps)
 
 function flyLoop() {
   requestAnimationFrame(flyLoop);
-  updateAudioListener();
+  updateSpatialAudio();
   updateGumballOverlay();
   if (!viewer || _keys.size === 0) return;
 
