@@ -106,6 +106,130 @@ storyInput.addEventListener("input", () => {
   charCounter.classList.toggle("near-limit", len >= 250);
 });
 
+// ── Draft save / restore ─────────────────────────────────────────────────
+// Text fields → localStorage (fast, synchronous).
+// Selected photos → IndexedDB (only option for binary File data).
+// Audio can't be reliably persisted; the user re-adds it after restore.
+
+const DRAFT_KEY    = "memo-upload-draft";
+const DB_NAME      = "memo-draft-db";
+const DB_VER       = 1;
+const FILES_STORE  = "draft-files";
+
+let _draftTimer = null;
+
+// ── IndexedDB helpers ─────────────────────────────────────────────────────
+
+function _openDb() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(FILES_STORE))
+        db.createObjectStore(FILES_STORE, { keyPath: "idx" });
+    };
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = ()  => rej(req.error);
+  });
+}
+
+async function saveDraftFiles(entries) {
+  try {
+    const db = await _openDb();
+    const tx = db.transaction(FILES_STORE, "readwrite");
+    const st = tx.objectStore(FILES_STORE);
+    st.clear();
+    entries.forEach(({ file, year }, idx) => {
+      st.put({ idx, blob: file, name: file.name, type: file.type, year });
+    });
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+  } catch (e) { console.warn("saveDraftFiles:", e); }
+}
+
+async function loadDraftFiles() {
+  try {
+    const db  = await _openDb();
+    const tx  = db.transaction(FILES_STORE, "readonly");
+    const all = await new Promise((res, rej) => {
+      const r = tx.objectStore(FILES_STORE).getAll();
+      r.onsuccess = () => res(r.result);
+      r.onerror   = rej;
+    });
+    return all
+      .sort((a, b) => a.idx - b.idx)
+      .map(item => ({ file: new File([item.blob], item.name, { type: item.type }), year: item.year || "" }));
+  } catch { return []; }
+}
+
+async function clearDraftFiles() {
+  try {
+    const db = await _openDb();
+    db.transaction(FILES_STORE, "readwrite").objectStore(FILES_STORE).clear();
+  } catch {}
+}
+
+// ── Text field draft (localStorage) ──────────────────────────────────────
+
+function saveDraft() {
+  const draft = {
+    name: nameInput.value, author: authorInput.value,
+    year: yearInput.value, story:  storyInput.value,
+    ts:   Date.now(),
+  };
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch {}
+  clearDraftFiles();
+}
+
+function scheduleDraftSave() {
+  clearTimeout(_draftTimer);
+  _draftTimer = setTimeout(saveDraft, 600);
+}
+
+// Auto-save text on every keystroke (debounced).
+[nameInput, authorInput, yearInput, storyInput].forEach(el =>
+  el.addEventListener("input", scheduleDraftSave)
+);
+
+// Restore on load — async so files come back from IndexedDB too.
+async function restoreDraft() {
+  let hadText = false;
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d.ts && Date.now() - d.ts < 4 * 60 * 60 * 1000) {
+        if (d.name)   { nameInput.value   = d.name;   dotName.classList.add("filled");   hadText = true; }
+        if (d.author) { authorInput.value = d.author; dotAuthor.classList.add("filled"); hadText = true; }
+        if (d.year)   { yearInput.value   = d.year;   dotYear.classList.add("filled");   hadText = true; }
+        if (d.story)  {
+          storyInput.value = d.story; dotStory.classList.add("filled"); hadText = true;
+          const len = d.story.length;
+          charCounter.textContent = `${len} / 280`;
+          charCounter.classList.toggle("near-limit", len >= 250);
+        }
+      } else { clearDraft(); }
+    }
+  } catch {}
+
+  // Restore photos from IndexedDB.
+  const restored = await loadDraftFiles();
+  if (restored.length) {
+    selectedFiles = restored;
+    renderSelection();
+    if (hadText || restored.length) {
+      setStatus("Draft restored — re-add your audio clip then tap Initiate Reconstruction.", "pending");
+    }
+  } else if (hadText) {
+    setStatus("Draft restored — re-select your photo and audio to continue.", "pending");
+  }
+}
+
+restoreDraft();
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str ?? "";
@@ -115,6 +239,7 @@ function escapeHtml(str) {
 fileInput.addEventListener("change", () => {
   selectedFiles = Array.from(fileInput.files || []).map(file => ({ file, year: "" }));
   renderSelection();
+  saveDraftFiles(selectedFiles); // persist photos to IndexedDB
 });
 
 function renderSelection() {
@@ -169,10 +294,12 @@ function renderSelection() {
     `;
     row.querySelector(".batch-year-input").addEventListener("input", e => {
       selectedFiles[i].year = e.target.value;
+      saveDraftFiles(selectedFiles);
     });
     row.querySelector(".batch-remove").addEventListener("click", () => {
       selectedFiles.splice(i, 1);
       renderSelection();
+      saveDraftFiles(selectedFiles);
     });
     batchListEl.appendChild(row);
   });
@@ -701,6 +828,7 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedFiles.length) return;
 
+  saveDraft(); // ensure latest field values are persisted before the long request
   setBusy(true);
 
   const total = selectedFiles.length;
@@ -733,10 +861,18 @@ form.addEventListener("submit", async (event) => {
         formData.append("audio", selectedAudioBlob, filename);
       }
 
-      const response = await fetch("/api/predict", { method: "POST", body: formData });
+      let response;
+      try {
+        response = await fetch("/api/predict", { method: "POST", body: formData });
+      } catch (networkErr) {
+        throw new Error(`Cannot reach the server — check that the laptop and phone are on the same Wi-Fi network. (${networkErr.message})`);
+      }
       if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(`Photo ${i + 1} of ${total}: ${response.status} ${detail}`);
+        let detail = "";
+        try { detail = await response.text(); } catch {}
+        // FastAPI wraps detail in JSON: {"detail": "..."} — unwrap it if so
+        try { const j = JSON.parse(detail); if (j?.detail) detail = j.detail; } catch {}
+        throw new Error(`Upload failed (${response.status}): ${detail || "unknown server error"}`);
       }
 
       lastScene = await response.json();
@@ -779,6 +915,7 @@ function setStatus(message, kind) {
 }
 
 function resetForm() {
+  clearDraft();
   selectedFiles = [];
   fileInput.value = "";
   renderSelection();

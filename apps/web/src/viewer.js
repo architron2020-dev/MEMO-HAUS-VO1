@@ -1,5 +1,6 @@
 import "./viewer.css";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
+import { parseSplatPly } from "./ply-parser.js";
 
 const viewerEl      = document.getElementById("viewer");
 const placeholderEl = document.getElementById("placeholder");
@@ -198,19 +199,53 @@ let worldScenes    = [];  // scenes currently in Memory Verse (may be a subset)
 let worldLoadedOrder = []; // scene ids ordered by viewer scene index
 let worldFocusedId = null; // which scene's audio is currently active
 
-const WORLD_SPACING = 55;  // X-gap between scenes (units); all scenes placed in a row at Z=0
+const WORLD_SPACING = 55;  // fallback gap between scene CENTERS (used only when extents unknown)
+const SCENE_GAP     = 14;  // minimum gap between scene EDGES in world units
 const worldPositions = new Map(); // scene id → [x, y, z]
+// scene id → { xSpan, zSpan } — measured from PLY before placement
+const sceneExtents   = new Map();
 
-// Places targetScenes in a centred horizontal row (X axis only, Z=0).
-// 2 scenes → [-27.5, 0, 0] and [27.5, 0, 0]
-// 3 scenes → [-55, 0, 0], [0, 0, 0], [55, 0, 0] … etc.
-// Called every time Memory Verse is (re)built so positions always match the
-// current subset and the user never sees Z-depth stacking.
-function assignWorldPositionsLinear(targetScenes) {
-  const N = targetScenes.length;
-  const totalWidth = (N - 1) * WORLD_SPACING;
+// Light PLY parse (8 k sample) → X and Z extents of the gaussian cloud.
+// Uses the 5th–95th percentile to ignore stray outlier splats.
+async function measureSplatExtent(scene) {
+  if (sceneExtents.has(scene.id)) return sceneExtents.get(scene.id);
+  try {
+    const data = await parseSplatPly(scene.ply_url, 8000);
+    if (!data || data.count < 4) return null;
+    const xs = [], zs = [];
+    for (let i = 0; i < data.count; i++) {
+      xs.push(data.positions[i * 3]);
+      zs.push(data.positions[i * 3 + 2]);
+    }
+    xs.sort((a, b) => a - b);
+    zs.sort((a, b) => a - b);
+    const lo = Math.floor(data.count * 0.05);
+    const hi = Math.ceil(data.count * 0.95) - 1;
+    const ext = {
+      xSpan: Math.max(4, xs[hi] - xs[lo]),
+      zSpan: Math.max(4, zs[hi] - zs[lo]),
+    };
+    sceneExtents.set(scene.id, ext);
+    return ext;
+  } catch { return null; }
+}
+
+// Places targetScenes in a centred horizontal row with adaptive gaps:
+// each scene occupies its measured X-span, with SCENE_GAP between edges.
+// Falls back to WORLD_SPACING centre-to-centre when extents are unknown.
+function assignWorldPositionsAdaptive(targetScenes) {
+  const spans = targetScenes.map(s => {
+    const e = sceneExtents.get(s.id);
+    return e ? e.xSpan : WORLD_SPACING;
+  });
+
+  // Total row width = sum of all spans + gaps between them
+  const totalWidth = spans.reduce((a, b) => a + b, 0) + (targetScenes.length - 1) * SCENE_GAP;
+  let cursor = -totalWidth / 2;
   targetScenes.forEach((s, i) => {
-    worldPositions.set(s.id, [-totalWidth / 2 + i * WORLD_SPACING, 0, 0]);
+    const cx = cursor + spans[i] / 2;
+    worldPositions.set(s.id, [cx, 0, 0]);
+    cursor += spans[i] + SCENE_GAP;
   });
 }
 
@@ -224,15 +259,12 @@ function assignWorldPosition(scene) {
   return pos;
 }
 
-// Switch which scene is "focused" in Memory Verse: fly the camera to it,
-// stop all audio, then start only that scene's audio with adaptive intensity.
+// Move the camera to the canonical front view of a scene in Memory Verse.
+// Audio for ALL scenes runs simultaneously — distance controls volume via
+// updateSpatialAudio() each frame, so no audio changes happen here.
 function focusWorldScene(sceneId, worldPos) {
-  flyToScene(worldPos);
-  if (worldFocusedId === sceneId) return;
+  flyToScene(worldPos, true);   // true = always approach from -Z front
   worldFocusedId = sceneId;
-  stopAllAudio();
-  const scene = worldScenes.find(s => s.id === sceneId);
-  if (scene) playSceneAudio(scene, worldPos);
 }
 
 let chain = Promise.resolve();
@@ -598,12 +630,10 @@ viewerEl.addEventListener("pointermove", e => {
 
 viewerEl.addEventListener("pointerup", e => {
   if (_dragDist < 6) {
-    if (worldMode && gumballMode) {
-      // Gumball mode: tap selects the nearest scene for moving
-      const nearest = findNearestWorldSceneAndId(e.clientX, e.clientY);
-      if (nearest) selectGumballScene(nearest.id);
-      else deselectGumball();
-    } else if (worldMode) {
+    if (worldMode) {
+      // Always find the nearest visible scene — no radius cutoff.
+      // If all scene centers are behind the camera (deeply inside one),
+      // fall back to the overview so the user can re-orient.
       const target = findNearestWorldSceneAndId(e.clientX, e.clientY);
       if (target) focusWorldScene(target.id, target.pos);
       else flyToWorldOverview();
@@ -670,17 +700,25 @@ function resetCamera() {
 // the camera to a specific scene instead of always returning to the origin.
 // Approaches from whichever side the camera already happens to be on, so the
 // camera glides over rather than teleporting around the target.
-function flyToScene(targetPos) {
+// fromFront=true: always approach from the -Z side (canonical Memory Verse
+// front view), regardless of where the camera currently is. Prevents the
+// "black side" problem when the user navigated behind a scene.
+function flyToScene(targetPos, fromFront = false) {
   if (!viewer?.camera) return;
   if (resetRaf) cancelAnimationFrame(resetRaf);
 
   const cam = viewer.camera;
   const sp  = { x: cam.position.x, y: cam.position.y, z: cam.position.z };
 
-  let appX = sp.x - targetPos[0];
-  let appZ = sp.z - targetPos[2];
-  const appLen = Math.hypot(appX, appZ) || 1;
-  appX /= appLen; appZ /= appLen;
+  let appX, appZ;
+  if (fromFront) {
+    appX = 0; appZ = -1; // canonical -Z approach (matching overview direction)
+  } else {
+    appX = sp.x - targetPos[0];
+    appZ = sp.z - targetPos[2];
+    const appLen = Math.hypot(appX, appZ) || 1;
+    appX /= appLen; appZ /= appLen;
+  }
 
   const STANDOFF = 3.2;
   const ep = {
@@ -729,21 +767,27 @@ function flyToScene(targetPos) {
 // All scenes are on the X axis at Z=0, so the camera just needs to pull
 // back along -Z far enough to fit the total width in the FOV.
 function worldOverviewPos() {
-  const positions = worldScenes.length
-    ? worldScenes.map(s => worldPositions.get(s.id)).filter(Boolean)
-    : [...worldPositions.values()];
+  const activeScenes = worldScenes.length ? worldScenes : [];
+  if (activeScenes.length === 0) return { x: 0, y: 0, z: -30, yaw: 0, pitch: 0.05 };
 
-  if (positions.length === 0) return { x: 0, y: 0, z: -30, yaw: 0, pitch: 0.05 };
-
-  let minX = Infinity, maxX = -Infinity;
-  for (const [px] of positions) {
-    if (px < minX) minX = px;
-    if (px > maxX) maxX = px;
+  // Compute the true outer edges of the scene row (center ± half-span for each scene).
+  let minEdge = Infinity, maxEdge = -Infinity, maxDepth = 0;
+  for (const s of activeScenes) {
+    const pos = worldPositions.get(s.id);
+    if (!pos) continue;
+    const ext = sceneExtents.get(s.id);
+    const halfX = ext ? ext.xSpan / 2 : WORLD_SPACING / 2;
+    const depth  = ext ? ext.zSpan     : WORLD_SPACING;
+    if (pos[0] - halfX < minEdge) minEdge = pos[0] - halfX;
+    if (pos[0] + halfX > maxEdge) maxEdge = pos[0] + halfX;
+    if (depth > maxDepth) maxDepth = depth;
   }
-  const cx = (minX + maxX) / 2;
-  const totalWidth = maxX - minX;
-  // Pull back so the total span fits comfortably in a ~75° FOV with margin.
-  const pullback = Math.max(totalWidth / 1.1 + WORLD_SPACING * 0.7, 30);
+  if (minEdge === Infinity) return { x: 0, y: 0, z: -30, yaw: 0, pitch: 0.05 };
+
+  const cx = (minEdge + maxEdge) / 2;
+  const rowWidth = maxEdge - minEdge;
+  // Pull back enough to fit the full row width in ~75° FOV, plus scene depth margin.
+  const pullback = Math.max(rowWidth / 1.1 + maxDepth * 0.5 + SCENE_GAP, 30);
   return { x: cx, y: 0, z: -pullback, yaw: 0, pitch: 0.05 };
 }
 
@@ -804,11 +848,12 @@ function projectToScreen(worldPos) {
   };
 }
 
-const WORLD_CLICK_RADIUS_PX = 260;
-
+// Always returns the nearest scene in worldScenes — no radius cutoff.
+// Scenes whose center is behind the camera are skipped (projectToScreen returns null),
+// but any visible scene is always reachable with a single tap.
 function findNearestWorldScene(clickX, clickY) {
   let best = null, bestDist = Infinity;
-  for (const scene of scenes) {
+  for (const scene of worldScenes) {
     const pos = worldPositions.get(scene.id);
     if (!pos) continue;
     const screen = projectToScreen(pos);
@@ -816,13 +861,12 @@ function findNearestWorldScene(clickX, clickY) {
     const d = Math.hypot(screen.x - clickX, screen.y - clickY);
     if (d < bestDist) { bestDist = d; best = pos; }
   }
-  return bestDist <= WORLD_CLICK_RADIUS_PX ? best : null;
+  return best;
 }
 
-// Same as findNearestWorldScene but returns { pos, id } for gumball use.
 function findNearestWorldSceneAndId(clickX, clickY) {
   let best = null, bestDist = Infinity;
-  for (const scene of scenes) {
+  for (const scene of worldScenes) {
     const pos = worldPositions.get(scene.id);
     if (!pos) continue;
     const screen = projectToScreen(pos);
@@ -830,7 +874,7 @@ function findNearestWorldSceneAndId(clickX, clickY) {
     const d = Math.hypot(screen.x - clickX, screen.y - clickY);
     if (d < bestDist) { bestDist = d; best = { pos, id: scene.id }; }
   }
-  return bestDist <= WORLD_CLICK_RADIUS_PX ? best : null;
+  return best;
 }
 
 // ── World of Memories — enter / exit ────────────────────────────────────────
@@ -848,15 +892,16 @@ function buildWorldMode(sceneIds) {
   worldScenes = targetScenes;
   worldFocusedId = null;
 
-  // Lay scenes out in a centred horizontal row — no Z-depth stacking.
-  assignWorldPositionsLinear(targetScenes);
+  // Positions are assigned adaptively (after measuring extents) inside the
+  // runExclusive block below. Set a provisional layout now so any existing
+  // worldPositions entries for these scenes are valid during the early phase.
+  assignWorldPositionsAdaptive(targetScenes);
 
   const wasAlreadyIn = worldMode;
   worldMode = true;
   worldLoadedOrder = [];
   worldModeBtnEl.textContent = "Exit Memory Verse";
   worldModeBtnEl.classList.add("active");
-  gumballBtnEl.classList.remove("hidden");
   stopDwell();
   hideHud();
 
@@ -864,9 +909,14 @@ function buildWorldMode(sceneIds) {
     worldLog(
       wasAlreadyIn
         ? `Rebuilding Memory Verse — ${targetScenes.length} memories selected.`
-        : `Entering Memory Verse — ${targetScenes.length} memories to place.`
+        : `Entering Memory Verse — measuring ${targetScenes.length} memories…`
     );
     await overlayTo(1);
+
+    // Measure each scene's gaussian cloud extent in parallel before placing —
+    // results are cached in sceneExtents so placement is always non-overlapping.
+    await Promise.all(targetScenes.map(s => measureSplatExtent(s)));
+    assignWorldPositionsAdaptive(targetScenes);
 
     try {
       await removeAllScenes();
@@ -921,12 +971,17 @@ function buildWorldMode(sceneIds) {
     worldLog(`All ${loadedCount} memories are in the world.`);
     setTimeout(() => worldDebugEl.classList.add("hidden"), 1800);
 
-    // Auto-focus the centre scene so audio starts immediately on entry.
-    const midScene = targetScenes[Math.floor(targetScenes.length / 2)];
-    if (midScene) {
-      worldFocusedId = midScene.id;
-      playSceneAudio(midScene, worldPositions.get(midScene.id) || [0, 0, 0]);
+    // Start audio for every scene simultaneously — distance-based gain in
+    // updateSpatialAudio() makes near scenes loud and far scenes quiet,
+    // so walking between memories naturally cross-fades their audio.
+    stopAllAudio();
+    for (const s of targetScenes) {
+      const pos = worldPositions.get(s.id) || [0, 0, 0];
+      playSceneAudio(s, pos);
     }
+    // Camera starts at the middle scene.
+    const midScene = targetScenes[Math.floor(targetScenes.length / 2)];
+    if (midScene) worldFocusedId = midScene.id;
   });
 }
 
@@ -941,10 +996,6 @@ function exitWorldMode() {
   worldScenes = [];
   worldLoadedOrder = [];
   worldFocusedId = null;
-  gumballMode = false;
-  deselectGumball();
-  gumballBtnEl.classList.add("hidden");
-  gumballBtnEl.classList.remove("active");
   stopAllAudio();
   worldModeBtnEl.textContent = "Enter Memory Verse";
   worldModeBtnEl.classList.remove("active");
@@ -1073,17 +1124,12 @@ function goToIndex(index) {
 
 async function poll() {
   try {
-    const [scenesRes, stitchedRes] = await Promise.all([
-      fetch("/api/scenes", { cache: "no-store" }),
-      fetch("/api/stitched-scenes", { cache: "no-store" }).catch(() => null),
-    ]);
+    const scenesRes = await fetch("/api/scenes", { cache: "no-store" });
     if (!scenesRes.ok) throw new Error(`HTTP ${scenesRes.status}`);
     clearTimeout(errorTimer);
     connectionEl.dataset.state = "";
 
-    const individual = await scenesRes.json();
-    const stitched = stitchedRes && stitchedRes.ok ? await stitchedRes.json() : [];
-    const all = [...individual, ...stitched];
+    const all = await scenesRes.json();
     if (!all.length) return;
     const known = new Set(scenes.map(s => s.id));
     const fresh = all.filter(s => !known.has(s.id));
@@ -1245,157 +1291,6 @@ document.addEventListener("keydown", e => {
   if (e.code === "KeyF") toggleFullscreen();
 });
 
-// ── Gumball — scene position tool ────────────────────────────────────────
-// Active only while Memory Verse is open. Clicking the ⊕ MOVE button enters
-// move mode; tapping a scene selects it; dragging the red X or blue Z handle
-// repositions that scene. On drag-end the scene is removed and re-added at
-// the new position so the GPU data is rebuilt correctly.
-
-const gumballBtnEl     = document.getElementById("gumball-btn");
-const gumballOverlayEl = document.getElementById("gumball-overlay");
-const gumballCenterEl  = document.getElementById("gumball-center");
-const gumballXEl       = document.getElementById("gumball-x-handle");
-const gumballZEl       = document.getElementById("gumball-z-handle");
-const gumballLabelEl   = document.getElementById("gumball-label");
-
-let gumballMode         = false;
-let gumballSelectedId   = null;   // scene id currently being moved
-let gumballDragAxis     = null;   // "x" | "z" | null
-let gumballDragStart    = null;   // { clientX, clientY }
-let gumballDragOrigin   = null;   // original [x,y,z] before this drag
-
-// Pixels-to-world-units scale at the distance of the selected scene.
-function screenToWorldScale(worldPos) {
-  if (!viewer?.camera) return 0.02;
-  const cam = viewer.camera;
-  const dist = Math.hypot(
-    cam.position.x - worldPos[0],
-    cam.position.y - worldPos[1],
-    cam.position.z - worldPos[2]
-  );
-  const fovRad = ((cam.fov || 75) * Math.PI) / 180;
-  const focalPx = (viewerEl.clientHeight / 2) / Math.tan(fovRad / 2);
-  return dist / focalPx;
-}
-
-function deselectGumball() {
-  gumballSelectedId = null;
-  gumballOverlayEl.classList.add("hidden");
-}
-
-function selectGumballScene(sceneId) {
-  const scene = worldScenes.find(s => s.id === sceneId);
-  if (!scene) return;
-  gumballSelectedId = sceneId;
-  gumballLabelEl.textContent = (scene.name || "Untitled").toUpperCase();
-  gumballOverlayEl.classList.remove("hidden");
-}
-
-// Updates handle screen positions every frame while gumball is active.
-function updateGumballOverlay() {
-  if (!gumballMode || !gumballSelectedId || !worldMode) return;
-  const pos = worldPositions.get(gumballSelectedId);
-  if (!pos) return;
-  const screen = projectToScreen(pos);
-  if (!screen) { gumballOverlayEl.classList.add("hidden"); return; }
-  gumballOverlayEl.classList.remove("hidden");
-
-  const HANDLE_OFFSET = 72; // px from center to each axis handle
-  gumballCenterEl.style.cssText = `left:${screen.x}px;top:${screen.y}px`;
-  gumballXEl.style.cssText      = `left:${screen.x + HANDLE_OFFSET}px;top:${screen.y}px`;
-  gumballZEl.style.cssText      = `left:${screen.x}px;top:${screen.y - HANDLE_OFFSET}px`;
-  gumballLabelEl.style.cssText  = `left:${screen.x}px;top:${screen.y}px`;
-}
-
-// After a drag ends, remove the scene at its old viewer index and re-add
-// at the updated worldPosition — the only reliable way to move a loaded splat.
-async function commitGumballMove() {
-  if (!gumballSelectedId) return;
-  const id    = gumballSelectedId;
-  const scene = worldScenes.find(s => s.id === id);
-  if (!scene) return;
-
-  const newPos    = worldPositions.get(id);
-  const vIndex    = worldLoadedOrder.indexOf(id);
-  if (vIndex === -1) return;
-
-  await runExclusive(async () => {
-    try {
-      await withLoadRetry(() => viewer.removeSplatScenes([vIndex], false));
-      worldLoadedOrder.splice(vIndex, 1);
-    } catch (err) { console.error("Gumball remove failed:", err); return; }
-
-    try {
-      await withLoadRetry(() => viewer.addSplatScene(scene.ply_url, {
-        format: GaussianSplats3D.SceneFormat.Ply,
-        splatAlphaRemovalThreshold: 5,
-        showLoadingUI: false,
-        position: newPos,
-      }));
-      worldLoadedOrder.push(id);
-    } catch (err) { console.error("Gumball re-add failed:", err); }
-  });
-}
-
-// ── Handle drag listeners ──────────────────────────────────────────────────
-
-function startHandleDrag(axis, e) {
-  e.stopPropagation();
-  if (!gumballSelectedId) return;
-  gumballDragAxis  = axis;
-  gumballDragStart = { x: e.clientX, y: e.clientY };
-  gumballDragOrigin = [...(worldPositions.get(gumballSelectedId) || [0,0,0])];
-  e.currentTarget.setPointerCapture(e.pointerId);
-}
-
-function onHandlePointerMove(e) {
-  if (!gumballDragAxis || !gumballSelectedId) return;
-  if (!viewer?.camera) return;
-
-  const dx = e.clientX - gumballDragStart.x;
-  const dy = e.clientY - gumballDragStart.y;
-  const scale = screenToWorldScale(worldPositions.get(gumballSelectedId));
-  const m = viewer.camera.matrixWorld.elements;
-
-  if (gumballDragAxis === "x") {
-    // Map screen-X drag → world movement along the camera's right vector
-    const rightX = m[0], rightZ = m[2];
-    worldPositions.set(gumballSelectedId, [
-      gumballDragOrigin[0] + dx * scale * rightX,
-      gumballDragOrigin[1],
-      gumballDragOrigin[2] + dx * scale * rightZ,
-    ]);
-  } else {
-    // Map screen-Y drag (up = forward) → world movement along camera's forward vector
-    const fwdX = -m[8], fwdZ = -m[10];
-    worldPositions.set(gumballSelectedId, [
-      gumballDragOrigin[0] + (-dy) * scale * fwdX,
-      gumballDragOrigin[1],
-      gumballDragOrigin[2] + (-dy) * scale * fwdZ,
-    ]);
-  }
-}
-
-function onHandlePointerUp() {
-  if (!gumballDragAxis) return;
-  gumballDragAxis = null;
-  commitGumballMove();
-}
-
-[gumballXEl, gumballZEl].forEach(el => {
-  el.addEventListener("pointerdown", e => startHandleDrag(el.dataset.axis, e));
-  el.addEventListener("pointermove", onHandlePointerMove);
-  el.addEventListener("pointerup",   onHandlePointerUp);
-  el.addEventListener("pointercancel", onHandlePointerUp);
-});
-
-gumballBtnEl.addEventListener("click", () => {
-  if (!worldMode) return;
-  gumballMode = !gumballMode;
-  gumballBtnEl.classList.toggle("active", gumballMode);
-  if (!gumballMode) deselectGumball();
-});
-
 // ── Keyboard fly navigation ───────────────────────────────────────────────
 
 const _keys = new Set();
@@ -1413,7 +1308,6 @@ const TURN_SPEED = 0.032;  // radians per frame (~110°/sec at 60fps)
 function flyLoop() {
   requestAnimationFrame(flyLoop);
   updateSpatialAudio();
-  updateGumballOverlay();
   if (!viewer || _keys.size === 0) return;
 
   const cam = viewer.camera;

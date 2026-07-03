@@ -62,14 +62,12 @@ class Storage:
         self.root = root
         self.uploads_dir = root / "Memo-album"
         self.splats_dir = root / "Memo-splatted"
-        self.stitched_dir = root / "Memo-stitched"
         self.audio_dir = root / "Memo-audio"
         self.index_path = root / "scenes.json"
         self._lock = threading.Lock()
 
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.splats_dir.mkdir(parents=True, exist_ok=True)
-        self.stitched_dir.mkdir(parents=True, exist_ok=True)
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         if not self.index_path.exists():
             self._write_index([])

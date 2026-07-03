@@ -20,7 +20,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from memory_brain import MemoryBrain
 from sharp_engine import SharpEngine
 from storage import Scene, Storage, now
 
@@ -28,24 +27,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 LOGGER = logging.getLogger("memo-haus.api")
 
 # --- configuration -----------------------------------------------------
-# Storage lives at the repo root (outside apps/api) so generated files never
-# trip uvicorn's --reload watcher, which would otherwise reload the model.
 _DEFAULT_STORAGE = Path(__file__).resolve().parent.parent.parent / "storage"
 STORAGE_DIR = Path(os.environ.get("MEMO_STORAGE_DIR", _DEFAULT_STORAGE)).resolve()
 DEVICE = os.environ.get("MEMO_DEVICE", "default")
 CHECKPOINT = os.environ.get("MEMO_CHECKPOINT")
 WARMUP_TIMEOUT = float(os.environ.get("MEMO_WARMUP_TIMEOUT", "900"))
-# Off by default: pairwise DUSt3R registration is a second heavy model
-# competing for the same 4GB GPU as SHARP. Set MEMO_ENABLE_REGISTRATION=1
-# to let the memory brain attempt real 3D alignment on likely-overlap pairs.
-ENABLE_REGISTRATION = os.environ.get("MEMO_ENABLE_REGISTRATION", "0") == "1"
 
 # Populated lazily on first upload (deferred to avoid importing torch at startup)
 SUPPORTED_EXTENSIONS: set[str] = set()
 
 storage = Storage(STORAGE_DIR)
 engine = SharpEngine(device=DEVICE, checkpoint_path=Path(CHECKPOINT) if CHECKPOINT else None)
-brain = MemoryBrain(storage, enable_registration=ENABLE_REGISTRATION)
 
 _ready = threading.Event()        # set once model is loaded
 _processing = threading.Event()   # set while a prediction is running
@@ -93,16 +85,7 @@ def _warmup() -> None:
 def on_startup() -> None:
     LOGGER.info("Storage at %s", STORAGE_DIR)
     LOGGER.info("Warming up SHARP model in the background (device=%s)...", engine.device)
-    LOGGER.info("Memory brain registration: %s", "ENABLED" if ENABLE_REGISTRATION else "disabled")
     threading.Thread(target=_warmup, name="sharp-warmup", daemon=True).start()
-    # Deliberately NOT calling brain.reconcile() synchronously here: when
-    # registration is enabled it can run slow (or hang on a flaky network
-    # call inside DUSt3R's checkpoint loader) CPU-bound work per candidate
-    # pair, and a blocking call in the startup handler would mean the whole
-    # API — including plain scene browsing — never finishes starting until
-    # every pair is processed. The background loop below picks everything
-    # up within its own first cycle instead, without blocking readiness.
-    brain.start_background_loop()
 
 
 @app.get("/api/health")
@@ -119,13 +102,6 @@ def latest() -> JSONResponse:
 @app.get("/api/scenes")
 def scenes() -> list[dict]:
     return [_serialize(s) for s in storage.list_scenes()]
-
-
-@app.get("/api/clusters")
-def clusters() -> dict:
-    """The memory brain's current view: locations, decade coverage, gaps,
-    and likely-overlap pairs (2D visual similarity, not 3D registration)."""
-    return brain.read()
 
 
 @app.post("/api/select-scene")
@@ -168,50 +144,11 @@ def get_world_selection() -> dict:
 
 @app.delete("/api/scenes/{scene_id}")
 def delete_scene(scene_id: str) -> dict:
-    """Delete a memory. For an individual photo: removes its record, source
-    image, and splat file, plus any stitched scenes that depended on it
-    (a merge of A+B is meaningless once one side is gone). For a stitched
-    scene (id starts with 'stitched_'): removes only that merge, leaving
-    its two source scenes untouched."""
-    if scene_id.startswith("stitched_"):
-        removed = brain.delete_stitched_scene(scene_id)
-        if not removed:
-            raise HTTPException(status_code=404, detail="Stitched scene not found")
-        return {"deleted": scene_id}
-
     scene = storage.delete_scene(scene_id)
     if scene is None:
         raise HTTPException(status_code=404, detail="Scene not found")
-    brain.delete_scene_references(scene_id)
     LOGGER.info("Deleted scene %s (and its files)", scene_id)
     return {"deleted": scene_id}
-
-
-@app.get("/api/stitched-scenes")
-def stitched_scenes() -> list[dict]:
-    """Collective scenes the brain successfully merged from 2+ confirmed,
-    registered photos of the same place. Shaped like /api/scenes so the
-    viewer can drop these straight into its normal rotation."""
-    data = brain.read()
-    out = []
-    for loc in data.get("locations", {}).values():
-        for overlap in loc.get("confirmed_overlaps", []):
-            stitched_name = overlap.get("stitched_ply")
-            if not stitched_name:
-                continue
-            out.append({
-                "id": f"stitched_{overlap['scene_a']}_{overlap['scene_b']}",
-                "name": f"{loc['location_label']} (collective)",
-                "author": "Collective memory",
-                "year": "",
-                "story": "Combined from multiple people's photos of this place.",
-                "cluster_id": "",
-                "ply_url": f"/stitched/{stitched_name}",
-                "image_url": None,
-                "created_at": 0,
-                "stitch_confidence": overlap.get("confidence"),
-            })
-    return out
 
 
 @app.get("/api/music/search")
@@ -272,15 +209,32 @@ def predict(
     story: str = Form(""),
     audio: UploadFile | None = File(None),
 ) -> dict:
-    suffix = Path(image.filename or "").suffix.lower()
     # Populate supported extensions on first upload (torch must be loaded by then)
     if not SUPPORTED_EXTENSIONS:
         from sharp.utils import io as sharp_io
         SUPPORTED_EXTENSIONS.update(ext.lower() for ext in sharp_io.get_supported_image_extensions())
+
+    suffix = Path(image.filename or "").suffix.lower()
+
+    # Some mobile browsers (especially Android) don't include an extension in
+    # the uploaded filename. Fall back to guessing from the MIME type.
+    if not suffix and image.content_type:
+        import mimetypes
+        guessed = mimetypes.guess_extension(image.content_type)
+        # guess_extension returns things like '.jpe' / '.jpeg' — normalise to common forms
+        _mime_map = {
+            ".jpe": ".jpg", ".jpeg": ".jpg", ".jfif": ".jpg",
+            ".tiff": ".tif", ".heic": ".heic", ".heif": ".heif",
+        }
+        if guessed:
+            suffix = _mime_map.get(guessed, guessed)
+        LOGGER.info("No extension in filename; inferred '%s' from content-type '%s'", suffix, image.content_type)
+
     if suffix not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported image type '{suffix or image.filename}'.",
+            detail=f"Unsupported image type '{suffix or image.content_type or image.filename}'. "
+                   f"Please upload a JPEG, PNG, or WebP photo.",
         )
 
     # Block until the model is loaded (first run may download the checkpoint).
@@ -326,16 +280,11 @@ def predict(
             created_at=now(),
             year=year.strip(),
             story=story.strip(),
-            cluster_id=brain.cluster_id_for(name, year),
+            cluster_id="",
             audio_file=audio_filename,
         )
     )
-    LOGGER.info("Scene %s ready -> %s (cluster %s)", scene_id, scene.ply_url, scene.cluster_id)
-    # Deliberately NOT spawning a fresh reconcile thread here: a new thread
-    # touching torch/CUDA right after SHARP's own GPU inference call is the
-    # kind of multi-threaded CUDA contention that produces cuDNN stream
-    # errors. The brain's existing 30s background loop (start_background_loop)
-    # picks this scene up on its own within half a minute.
+    LOGGER.info("Scene %s ready -> %s", scene_id, scene.ply_url)
     return _serialize(scene)
 
 
@@ -354,8 +303,6 @@ def _serialize(scene: Scene) -> dict:
     }
 
 
-# Serve generated PLYs, source uploads, stitched collective scenes, and audio.
 app.mount("/outputs", StaticFiles(directory=str(storage.splats_dir)), name="outputs")
 app.mount("/uploads", StaticFiles(directory=str(storage.uploads_dir)), name="uploads")
-app.mount("/stitched", StaticFiles(directory=str(storage.stitched_dir)), name="stitched")
 app.mount("/audio", StaticFiles(directory=str(storage.audio_dir)), name="audio")

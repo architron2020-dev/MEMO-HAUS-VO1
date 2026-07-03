@@ -1,23 +1,12 @@
-@import "./contribute.css";
+@import "./upload.css";
 
-.stitched-heading,
 .individual-heading {
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.10em;
   text-transform: uppercase;
   margin: 0 0 4px;
-}
-
-.stitched-heading,
-.individual-heading {
   color: rgba(var(--hc), calc(0.85 * var(--op-boost)));
-}
-
-.individual-heading {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(var(--hc), calc(0.15 * var(--op-boost)));
 }
 
 /* Clean, evenly-spaced grid — no overlap between cards, on purpose: any
@@ -218,20 +207,6 @@
   opacity: 0.25;
   pointer-events: none;
   transition: opacity 0.2s ease;
-}
-
-/* Stitched cards get the amber "collective work" accent throughout the
-   app, distinguishing them at a glance from individually-uploaded photos */
-#stitched-list .memory-card-frame {
-  border-color: rgba(var(--accent-active), calc(0.30 * var(--op-boost)));
-}
-
-#stitched-list .memory-card:hover .memory-card-frame {
-  border-color: rgba(var(--accent-active), 0.70);
-}
-
-#stitched-list .memory-card-name {
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95);
 }
 
 /* ── Memory Verse multi-select ────────────────────────────────────────── */

@@ -83,18 +83,30 @@ class SharpEngine:
 
         image, _, f_px = io.load_rgb(image_path)
         height, width = image.shape[:2]
+        LOGGER.info("Input image: %dx%d", width, height)
+
+        # SHARP's model requires 1536×1536 internally — changing this breaks
+        # the DPT decoder's skip-connection sizes. We halve VRAM a different
+        # way: float16 autocast cuts intermediate activation memory in half,
+        # and flash-attention (PyTorch ≥2.0) makes attention O(n) not O(n²).
+        use_amp = self.device == "cuda"
 
         with self._lock:
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
             try:
-                gaussians = predict_image(
-                    self._predictor, image, f_px, torch.device(self.device)
-                )
+                with torch.amp.autocast(device_type="cuda", enabled=use_amp):
+                    gaussians = predict_image(
+                        self._predictor, image, f_px, torch.device(self.device)
+                    )
+            except RuntimeError as exc:
+                if "out of memory" in str(exc).lower() and self.device == "cuda":
+                    torch.cuda.empty_cache()
+                    raise RuntimeError(
+                        "GPU out of memory. Please restart the server and try again."
+                    ) from exc
+                raise
             finally:
-                # This card only has 4GB of VRAM — PyTorch's allocator caches
-                # freed blocks instead of returning them to the driver, which
-                # fragments fast across many differently-sized uploads and
-                # eventually looks like an OOM even with memory "free".
-                # Releasing the cache after every request keeps that in check.
                 if self.device == "cuda":
                     torch.cuda.empty_cache()
 

@@ -49,6 +49,10 @@ const child = spawn(pythonPath, args, {
     ...process.env,
     // Defer CUDA module loading until first use — reduces DLLs scanned at import time
     CUDA_MODULE_LOADING: "LAZY",
+    // Use expandable memory segments so the allocator can grow blocks without
+    // fragmenting the heap — prevents OOM on sequential uploads even when total
+    // VRAM used is well under the card's limit.
+    PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True",
   },
 });
 

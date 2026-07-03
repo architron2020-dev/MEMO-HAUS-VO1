@@ -9,8 +9,6 @@ initFullscreenPersistence();
 
 const statusEl = document.getElementById("memories-status");
 const listEl = document.getElementById("memories-list");
-const stitchedStatusEl = document.getElementById("stitched-status");
-const stitchedListEl = document.getElementById("stitched-list");
 const pageBackBtn = document.getElementById("page-back");
 
 pageBackBtn?.addEventListener("click", () => {
@@ -20,12 +18,7 @@ pageBackBtn?.addEventListener("click", () => {
 
 let activeCardEl = null;
 
-// Tracks which memory IDs are already on screen per list, so re-rendering on
-// each 15s poll only adds/removes what actually changed instead of nuking
-// and rebuilding every card — that's what lets a genuinely new card (e.g. a
-// stitched scene the memory brain just finished) play its tile-entrance
-// animation, while everything already there stays put, undisturbed.
-const renderedCards = { individual: new Map(), stitched: new Map() };
+const renderedCards = { individual: new Map() };
 
 function syncCardList(container, listKey, memories, emptyHtml) {
   const map = renderedCards[listKey];
@@ -67,35 +60,15 @@ function syncCardList(container, listKey, memories, emptyHtml) {
 
 async function loadMemories() {
   try {
-    const [scenesRes, stitchedRes] = await Promise.all([
-      fetch("/api/scenes", { cache: "no-store" }),
-      fetch("/api/stitched-scenes", { cache: "no-store" }).catch(() => null),
-    ]);
-    if (!scenesRes.ok) throw new Error(`HTTP ${scenesRes.status}`);
-
-    const individual = await scenesRes.json();
-    const stitched = stitchedRes && stitchedRes.ok ? await stitchedRes.json() : [];
+    const res = await fetch("/api/scenes", { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const individual = await res.json();
     individual.sort((a, b) => b.created_at - a.created_at);
-
-    renderStitched(stitched);
     renderIndividual(individual);
   } catch (err) {
     console.error(err);
     statusEl.textContent = "Could not reach the archive — try again shortly.";
-    stitchedStatusEl.textContent = "";
   }
-}
-
-function renderStitched(memories) {
-  stitchedStatusEl.textContent = memories.length
-    ? `${memories.length} collective scene${memories.length > 1 ? "s" : ""} — built by aligning multiple people's photos of the same place:`
-    : "";
-  syncCardList(
-    stitchedListEl,
-    "stitched",
-    memories,
-    `<p class="gap-empty">None yet — once 2+ people upload photos of the same place, the memory brain's collective scenes will appear here.</p>`,
-  );
 }
 
 function renderIndividual(memories) {
@@ -242,20 +215,16 @@ function handleDeleteClick(memory, cardEl, btnEl) {
 }
 
 async function deleteMemory(memory, cardEl) {
-  const isStitched = memory.id.startsWith("stitched_");
-  const target = isStitched ? stitchedStatusEl : statusEl;
-
   cardEl.classList.add("deleting");
   try {
     const res = await fetch(`/api/scenes/${encodeURIComponent(memory.id)}`, { method: "DELETE" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
     cardEl.remove();
-    target.textContent = `Deleted "${memory.name}".`;
+    statusEl.textContent = `Deleted "${memory.name}".`;
   } catch (err) {
     console.error(err);
     cardEl.classList.remove("deleting");
-    target.textContent = `Could not delete "${memory.name}": ${err.message}`;
+    statusEl.textContent = `Could not delete "${memory.name}": ${err.message}`;
   }
 }
 
