@@ -2,38 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Memo-Haus — Live Viewer</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <script>
       (function () {
-        // If this tab was opened from a mobile page's "Live Viewer" link,
-        // ?accent=r,g,b carries that tab's randomly-picked colour along —
-        // this tab's icon matches where you came from instead of picking
-        // its own. Opened directly (no link), it picks its own — same
-        // palette, same logic, fully parallel to the mobile app's starting
-        // screen. Either way, this only governs the screen BEFORE a scene
-        // loads — applyHudColor() takes over --hc once a real scene's own
-        // colour is extracted.
-        var params = new URLSearchParams(window.location.search);
-        var fromLink = params.get("accent");
-        var rgb;
-        if (fromLink && /^\d{1,3},\d{1,3},\d{1,3}$/.test(fromLink)) {
-          rgb = fromLink.split(",").map(Number);
-        } else {
-          var palette = [[31,46,110], [0,122,61], [242,169,0], [212,42,28], [15,76,129], [255,111,97], [95,75,139], [136,176,75], [187,38,73], [255,159,124], [102,103,171], [149,82,81], [0,128,128], [212,160,23], [233,30,99], [180,160,220], [204,85,0], [34,87,59]];
-          rgb = palette[Math.floor(Math.random() * palette.length)];
-        }
-        var soft = rgb.map(function (c) { return Math.round(c + (255 - c) * 0.62); });
-        document.documentElement.style.setProperty("--accent-pick", rgb.join(","));
-        document.documentElement.style.setProperty("--accent-pick-soft", soft.join(","));
+        var palettes = [
+          { a:'rgba(28,118,224,0.82)', b:'rgba(224,178,120,0.72)', c:'rgba(48,155,238,0.58)', d:'rgba(195,148,88,0.48)', icon:[28,118,224] },
+          { a:'rgba(68,138,95,0.82)',  b:'rgba(48,98,168,0.76)',   c:'rgba(138,112,58,0.62)', d:'rgba(52,128,112,0.56)', icon:[68,138,95] },
+          { a:'rgba(198,138,58,0.82)', b:'rgba(38,128,138,0.76)',  c:'rgba(228,168,78,0.62)', d:'rgba(48,118,128,0.52)', icon:[198,138,58] },
+          { a:'rgba(138,98,198,0.80)', b:'rgba(208,128,158,0.74)', c:'rgba(158,118,218,0.58)', d:'rgba(188,108,138,0.48)', icon:[138,98,198] },
+          { a:'rgba(38,98,168,0.84)',  b:'rgba(218,118,98,0.76)',  c:'rgba(58,128,188,0.60)', d:'rgba(198,138,118,0.50)', icon:[38,98,168] },
+          { a:'rgba(42,108,68,0.84)',  b:'rgba(198,162,58,0.76)',  c:'rgba(58,138,82,0.60)', d:'rgba(178,138,48,0.50)', icon:[42,108,68] },
+        ];
+        var p = palettes[Math.floor(Math.random() * palettes.length)];
+        var root = document.documentElement;
+        root.style.setProperty('--orb-a', p.a);
+        root.style.setProperty('--orb-b', p.b);
+        root.style.setProperty('--orb-c', p.c);
+        root.style.setProperty('--orb-d', p.d);
+        var soft = p.icon.map(function(c){ return Math.round(c+(255-c)*0.62); });
+        root.style.setProperty('--accent-pick', p.icon.join(','));
+        root.style.setProperty('--accent-pick-soft', soft.join(','));
+        window.__memoFluidColors = [p.a, p.b, p.c, p.d];
 
         var iconLink = document.querySelector('link[rel="icon"]');
         if (iconLink) {
           var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-            + '<circle cx="16" cy="16" r="15" fill="rgb(' + rgb.join(",") + ')"/>'
-            + '<circle cx="16" cy="16" r="5" fill="#06080c"/></svg>';
-          iconLink.href = "data:image/svg+xml," + encodeURIComponent(svg);
+            + '<circle cx="16" cy="16" r="15" fill="rgb(' + p.icon.join(',') + ')"/>'
+            + '<circle cx="16" cy="16" r="5" fill="#ede8de"/></svg>';
+          iconLink.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
         }
       })();
     </script>
@@ -47,25 +48,33 @@
     <div id="transition-overlay"></div>
 
     <div id="placeholder">
+      <!-- Fluid beige background with adaptive colour orbs -->
+      <div id="splash-fluid">
+        <div class="orb orb-a"></div>
+        <div class="orb orb-b"></div>
+        <div class="orb orb-c"></div>
+        <div class="orb orb-d"></div>
+        <div class="orb orb-e"></div>
+        <div class="orb orb-f"></div>
+      </div>
       <div class="placeholder-inner">
         <svg class="placeholder-logo" viewBox="0 0 200 108" role="img" aria-label="Memo-Haus">
           <g transform="translate(100,32)">
-            <ellipse rx="26" ry="11" fill="none" style="stroke: rgb(var(--hc))" stroke-width="1.6" transform="rotate(-18)"/>
-            <circle r="18" fill="none" style="stroke: rgb(var(--hc))" stroke-width="1.6"/>
+            <ellipse rx="26" ry="11" fill="none" stroke="rgba(255,255,255,0.70)" stroke-width="1.6" transform="rotate(-18)"/>
+            <circle r="18" fill="none" stroke="rgba(255,255,255,0.50)" stroke-width="1.6"/>
             <g class="splash-orbit">
-              <line x1="-18" y1="0" x2="-24" y2="0" style="stroke: rgb(var(--hc))" stroke-width="1.8"/>
-              <line x1="18" y1="0" x2="24" y2="0" style="stroke: rgb(var(--hc))" stroke-width="1.8"/>
+              <line x1="-18" y1="0" x2="-24" y2="0" stroke="rgba(255,255,255,0.50)" stroke-width="1.8"/>
+              <line x1="18" y1="0" x2="24" y2="0" stroke="rgba(255,255,255,0.50)" stroke-width="1.8"/>
             </g>
-            <circle r="3.5" style="fill: rgb(var(--hc))"/>
-            <circle r="1.4" cx="-0.7" cy="-0.7" style="fill: var(--page-bg)"/>
+            <circle r="3.5" fill="rgba(255,255,255,0.90)"/>
+            <circle r="1.4" cx="-0.7" cy="-0.7" fill="rgba(0,0,0,0.25)"/>
           </g>
           <g text-anchor="middle">
-            <text x="100" y="74" font-size="24" font-weight="800" letter-spacing="6" style="fill: rgb(var(--hc))">MEMO</text>
-            <text x="100" y="100" font-size="24" font-weight="800" letter-spacing="6" style="fill: rgb(var(--hc))">HAUS</text>
+            <text x="100" y="74" font-size="24" font-weight="800" letter-spacing="6" fill="rgba(255,255,255,0.95)">MEMO</text>
+            <text x="100" y="100" font-size="24" font-weight="800" letter-spacing="6" fill="rgba(255,255,255,0.95)">HAUS</text>
           </g>
         </svg>
-        <p class="placeholder-sub">From Archive To Participatory Experience</p>
-        <button type="button" id="splash-start-btn" class="splash-start-btn">Step Into Memory</button>
+        <p class="placeholder-sub">from archive to participatory experience</p>
       </div>
     </div>
 
@@ -133,19 +142,7 @@
     <button type="button" id="world-mode-btn" class="world-mode-btn" disabled>Enter Memory Verse</button>
     <div id="world-debug" class="world-debug hidden"></div>
 
-    <!-- Keyboard navigation guide — small closable tab, expands on click -->
-    <button type="button" id="nav-hint-tab" class="nav-hint-tab">?</button>
-    <div id="nav-hint-panel" class="nav-hint-panel hidden">
-      <button type="button" id="nav-hint-close" class="nav-hint-close" aria-label="Close">×</button>
-      <div class="nav-hint-row"><span class="nk">W S</span> / <span class="nk">↑ ↓</span> walk</div>
-      <div class="nav-hint-row"><span class="nk">A D</span> strafe</div>
-      <div class="nav-hint-row"><span class="nk">← →</span> turn head</div>
-      <div class="nav-hint-row"><span class="nk">Q E</span> up / down</div>
-      <div class="nav-hint-row"><span class="nk">drag</span> look</div>
-      <div class="nav-hint-row"><span class="nk">scroll</span> zoom</div>
-      <div class="nav-hint-row"><span class="nk">click</span> reset / focus memory</div>
-      <div class="nav-hint-row"><span class="nk">F</span> fullscreen</div>
-    </div>
+    <!-- Reset button and instructions removed; nav controlled via mobile app -->
 
     <script type="module" src="/src/viewer.js"></script>
   </body>

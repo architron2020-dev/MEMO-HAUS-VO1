@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
 
   /* --accent-pick is set by the inline script in <head>, same random-on-
      every-load palette as the mobile pages (or carried over via ?accent=
@@ -32,7 +32,7 @@ html, body {
   overflow: hidden;
   background: var(--page-bg);
   color: rgb(var(--text-base));
-  cursor: none;
+  cursor: auto;
 }
 
 /* ── Gaussian viewer ─────────────────────────────────────────────────────── */
@@ -60,17 +60,14 @@ html, body {
   inset: 0;
   z-index: 5;
   pointer-events: none;
-  /* Slight, not overdone — just enough to soften the corners and frame the
-     scene a touch, well short of the heavy dark-edge look this used to be. */
   background: radial-gradient(
-    ellipse 80% 80% at 50% 50%,
-    transparent 55%,
-    rgba(0, 0, 0, 0.18) 85%,
-    rgba(0, 0, 0, 0.32) 100%
+    ellipse 70% 65% at 50% 50%,
+    transparent 0%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.30) 65%,
+    rgba(0, 0, 0, 0.72) 82%,
+    rgba(0, 0, 0, 0.92) 100%
   );
-  /* Only makes sense as a cinematic edge-darken against a black backdrop —
-     in light mode it just reads as a stray grey cloud, so it's switched
-     off entirely there instead of re-tinted. */
   opacity: var(--vignette-opacity, 1);
 }
 
@@ -95,12 +92,26 @@ html, body {
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  background: #ede8de;
   transition: opacity 0.8s ease;
+}
+
+/* Fluid colour orbs inside the splash — same animation classes as upload page */
+#splash-fluid {
+  position: absolute;
+  inset: -25%;
+  background: #ede8de;
+  overflow: hidden;
+  filter: blur(72px) saturate(1.8);
+  pointer-events: none;
+  z-index: 0;
 }
 
 #placeholder.hidden { opacity: 0; }
 
 .placeholder-inner {
+  position: relative;
+  z-index: 1;
   text-align: center;
   max-width: 540px;
   padding: 0 24px;
@@ -110,16 +121,18 @@ html, body {
   display: block;
   width: clamp(160px, 22vw, 260px);
   height: auto;
-  margin: 0 auto 24px;
-  opacity: 0.88;
+  margin: 0 auto 28px;
+  opacity: 1;
+  filter: drop-shadow(0 2px 32px rgba(0,0,0,0.18));
 }
 
 .placeholder-sub {
   margin: 0 0 12px;
-  font-size: clamp(0.95rem, 1.8vw, 1.15rem);
-  font-weight: 700;
-  color: rgba(var(--text-base), calc(0.55 * var(--op-boost)));
-  letter-spacing: 0.06em;
+  font-size: clamp(0.75rem, 1.4vw, 0.88rem);
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
 }
 
 .placeholder-hint {
@@ -153,7 +166,7 @@ html, body {
 
 #story-overlay p {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: inherit;
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -234,7 +247,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: inherit;
 }
 
 .hud-status:empty {
@@ -317,6 +330,35 @@ html, body {
 /* No local --hc on these on purpose — they inherit the adaptive value set
    on :root by applyHudColor(), the same one driving the HUD's colour. */
 
+.reset-cam-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 68px;
+  z-index: 29;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(255,255,255,0.50);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.reset-cam-btn:hover {
+  background: rgba(255,255,255,0.16);
+  color: rgba(255,255,255,0.90);
+  border-color: rgba(255,255,255,0.35);
+}
+.reset-cam-btn:active {
+  background: rgba(255,255,255,0.22);
+}
+
 .nav-hint-tab {
   position: fixed;
   bottom: 20px;
@@ -334,7 +376,7 @@ html, body {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   color: rgba(var(--hc), calc(0.95 * var(--op-boost)));
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: inherit;
   font-size: 0.85rem;
   font-weight: 900;
   line-height: 1;
@@ -358,7 +400,7 @@ html, body {
   background: var(--chrome-bg);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: inherit;
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -408,7 +450,7 @@ html, body {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(var(--hc), calc(0.30 * var(--op-boost)));
   border-radius: 999px;
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: inherit;
   font-size: 0.68rem;
   letter-spacing: 0.10em;
   color: rgba(var(--hc), calc(0.75 * var(--op-boost)));
@@ -439,15 +481,7 @@ html, body {
    clear, on-theme indicator of exactly where a click will land. */
 
 .cursor-reticle {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 100;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  will-change: transform;
+  display: none;
 }
 
 /* Flat 2D mark — same filled-circle + contrasting centre dot as the
@@ -550,7 +584,7 @@ html, body {
   border-radius: 999px;
   background: rgb(var(--hc));
   color: var(--page-bg);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: inherit;
   font-size: 0.82rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -577,7 +611,7 @@ html, body {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   color: rgba(var(--hc), calc(0.95 * var(--op-boost)));
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: inherit;
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -621,3 +655,166 @@ html, body {
 
 .world-debug.hidden { display: none; }
 
+/* ── Mobile-app style match ──────────────────────────────────────────────────
+   Mirrors the tranquil white-on-dark aesthetic of the mobile app exactly:
+   same font stack, same text weight/size language, same ghost pill buttons.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── Scene HUD — completely recast as flowing white text ── */
+
+#scene-hud {
+  bottom: 28px !important;
+  left: 28px !important;
+  gap: 0 !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+}
+
+/* Hide the ring SVG entirely — a breathing dot replaces it inline */
+.hud-ring { display: none !important; }
+
+/* Hide label column (NAME / BY / YEAR / ERA / MEMO) */
+.hud-label { display: none !important; }
+
+/* Hide each row's flex layout, just stack values */
+.hud-row {
+  display: block !important;
+  gap: 0 !important;
+}
+
+/* Base value: clean white, lowercase */
+.hud-value {
+  font-family: inherit !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+  text-transform: none !important;
+  color: rgba(255,255,255,0.55) !important;
+  line-height: 1.55 !important;
+}
+
+/* Memory name — headline, big bold lowercase, matching verse-item-name */
+#caption-name.hud-value {
+  font-size: 1.55rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  color: rgba(255,255,255,0.92) !important;
+  line-height: 1.15 !important;
+  display: block !important;
+  margin-bottom: 6px !important;
+}
+
+/* Author — subtitle weight */
+#author-row .hud-value {
+  font-size: 0.78rem !important;
+  font-weight: 500 !important;
+  color: rgba(255,255,255,0.42) !important;
+}
+
+/* Year — same as author */
+#year-row .hud-value {
+  font-size: 0.78rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.01em !important;
+  color: rgba(255,255,255,0.35) !important;
+}
+
+/* Cluster/era row — hide, not meaningful for visitors */
+#cluster-row { display: none !important; }
+
+/* Story — lighter paragraph style */
+.hud-story {
+  font-size: 0.80rem !important;
+  font-weight: 400 !important;
+  color: rgba(255,255,255,0.48) !important;
+  text-transform: none !important;
+  letter-spacing: 0.01em !important;
+  line-height: 1.65 !important;
+  max-width: 280px !important;
+  margin-top: 6px !important;
+}
+
+/* HUD status text */
+.hud-status {
+  font-size: 0.60rem !important;
+  letter-spacing: 0.08em !important;
+  color: rgba(255,255,255,0.28) !important;
+  text-transform: uppercase !important;
+  margin-bottom: 8px !important;
+}
+
+/* Story overlay — white, no accent tint */
+#story-overlay p {
+  font-family: inherit !important;
+  color: rgba(255,255,255,0.80) !important;
+  font-size: 1rem !important;
+  letter-spacing: 0.02em !important;
+  font-weight: 500 !important;
+}
+
+/* ── World-mode button → white pill ─────────────────── */
+.world-mode-btn {
+  font-family: inherit !important;
+  border: none !important;
+  background: rgba(255,255,255,0.15) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  color: rgba(255,255,255,0.80) !important;
+  font-size: 0.80rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em !important;
+  text-transform: none !important;
+  padding: 11px 22px !important;
+}
+.world-mode-btn:hover:not(:disabled) { background: rgba(255,255,255,0.25) !important; color: white !important; }
+.world-mode-btn.active { background: white !important; color: rgba(0,0,0,0.78) !important; }
+.world-mode-btn:disabled { opacity: 0.28 !important; }
+
+/* ── Nav hint — tranquil ghost ─────────────────────── */
+.nav-hint-tab {
+  font-family: inherit !important;
+  border: 1px solid rgba(255,255,255,0.16) !important;
+  background: rgba(255,255,255,0.08) !important;
+  color: rgba(255,255,255,0.45) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+.nav-hint-tab:hover { background: rgba(255,255,255,0.14) !important; color: rgba(255,255,255,0.80) !important; border-color: rgba(255,255,255,0.30) !important; }
+
+.nav-hint-panel {
+  font-family: inherit !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  background: rgba(8,10,18,0.78) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  color: rgba(255,255,255,0.50) !important;
+  letter-spacing: 0.03em !important;
+  text-transform: none !important;
+  font-weight: 500 !important;
+  border-radius: 14px !important;
+}
+.nav-hint-panel .nk { color: rgba(255,255,255,0.88) !important; font-weight: 700 !important; }
+
+/* ── Processing pill ───────────────────────────────── */
+.processing-loader {
+  font-family: inherit !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  background: rgba(8,10,18,0.70) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  color: rgba(255,255,255,0.55) !important;
+  letter-spacing: 0.03em !important;
+  font-weight: 500 !important;
+}
+.processing-dot { background: rgba(255,255,255,0.75) !important; }
+
+/* ── Splash start button → white pill ─────────────── */
+.splash-start-btn {
+  font-family: inherit !important;
+  background: white !important;
+  color: rgba(0,0,0,0.75) !important;
+  text-transform: none !important;
+  letter-spacing: 0.02em !important;
+  font-weight: 700 !important;
+}
+.splash-start-btn:hover { background: rgba(255,255,255,0.92) !important; }

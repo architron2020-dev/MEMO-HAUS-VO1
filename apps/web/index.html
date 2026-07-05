@@ -2,218 +2,370 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Memo-Haus — Share a Photo of Wolfsburg</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Memo-Haus</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <script>
-      // Applied before first paint so there's no flash of the wrong theme —
-      // saved choice wins, otherwise fall back to the OS-level preference.
       (function () {
-        var saved = localStorage.getItem("memo-theme");
-        var theme = saved || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-        document.documentElement.dataset.theme = theme;
-
-        // One accent colour, picked fresh on every load — never persisted,
-        // so a new tab or a reopened app always lands on a different one.
-        // The soft variant (mixed toward white) is what the light-mode page
-        // background actually uses — full saturation is reserved for text/
-        // accents, a lighter tone reads better as a wash behind a white card.
-        var palette = [[31,46,110], [0,122,61], [242,169,0], [212,42,28], [15,76,129], [255,111,97], [95,75,139], [136,176,75], [187,38,73], [255,159,124], [102,103,171], [149,82,81], [0,128,128], [212,160,23], [233,30,99], [180,160,220], [204,85,0], [34,87,59]];
-        var rgb = palette[Math.floor(Math.random() * palette.length)];
-        var soft = rgb.map(function (c) { return Math.round(c + (255 - c) * 0.62); });
-        document.documentElement.style.setProperty("--accent-pick", rgb.join(","));
-        document.documentElement.style.setProperty("--accent-pick-soft", soft.join(","));
-        window.__memoAccentRgb = rgb;
-
-        // The static favicon.svg can't read CSS variables, so the browser
-        // tab icon is generated fresh here instead, in this load's colour —
-        // same logic every page on this domain shares, see setFavicon below.
+        var palettes = [
+          { a:'rgba(28,118,224,0.88)', b:'rgba(224,148,80,0.72)',  c:'rgba(48,155,238,0.65)', d:'rgba(180,128,60,0.55)', icon:[28,118,224] },
+          { a:'rgba(68,148,98,0.88)',  b:'rgba(48,98,188,0.78)',   c:'rgba(118,188,138,0.65)', d:'rgba(38,118,158,0.55)', icon:[68,148,98] },
+          { a:'rgba(218,138,48,0.88)', b:'rgba(38,148,158,0.78)',  c:'rgba(248,178,68,0.65)', d:'rgba(28,128,148,0.55)', icon:[218,138,48] },
+          { a:'rgba(148,88,218,0.85)', b:'rgba(218,118,168,0.78)', c:'rgba(168,108,238,0.62)', d:'rgba(198,98,148,0.52)', icon:[148,88,218] },
+          { a:'rgba(28,108,198,0.88)', b:'rgba(228,108,88,0.80)',  c:'rgba(48,138,218,0.65)', d:'rgba(208,128,108,0.55)', icon:[28,108,198] },
+          { a:'rgba(88,158,68,0.88)',  b:'rgba(218,178,48,0.78)',  c:'rgba(68,178,88,0.65)',  d:'rgba(198,158,38,0.55)', icon:[88,158,68] },
+        ];
+        var p = palettes[Math.floor(Math.random() * palettes.length)];
+        var root = document.documentElement;
+        root.style.setProperty('--orb-a', p.a);
+        root.style.setProperty('--orb-b', p.b);
+        root.style.setProperty('--orb-c', p.c);
+        root.style.setProperty('--orb-d', p.d);
+        root.style.setProperty('--accent-pick', p.icon.join(','));
+        window.__memoAccentRgb = p.icon;
+        window.__memoFluidColors = [p.a, p.b, p.c, p.d];
         var iconLink = document.querySelector('link[rel="icon"]');
         if (iconLink) {
           var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-            + '<circle cx="16" cy="16" r="15" fill="rgb(' + rgb.join(",") + ')"/>'
-            + '<circle cx="16" cy="16" r="5" fill="#06080c"/></svg>';
-          iconLink.href = "data:image/svg+xml," + encodeURIComponent(svg);
+            + '<circle cx="16" cy="16" r="15" fill="rgb(' + p.icon.join(',') + ')"/>'
+            + '<circle cx="16" cy="16" r="5" fill="#ede8de"/></svg>';
+          iconLink.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
         }
       })();
     </script>
   </head>
   <body class="upload-body">
+
+    <!-- Fluid background -->
+    <div id="fluid-bg">
+      <div class="orb orb-a"></div>
+      <div class="orb orb-b"></div>
+      <div class="orb orb-c"></div>
+      <div class="orb orb-d"></div>
+      <div class="orb orb-e"></div>
+      <div class="orb orb-f"></div>
+    </div>
+    <canvas id="particle-canvas"></canvas>
+
+    <!-- Splash -->
     <div id="app-splash" class="app-splash">
       <svg class="splash-logo" viewBox="0 0 200 108" role="img" aria-label="Memo-Haus">
         <g transform="translate(100,32)">
-          <ellipse rx="26" ry="11" fill="none" style="stroke: rgb(var(--hc))" stroke-width="1.6" transform="rotate(-18)"/>
-          <circle r="18" fill="none" style="stroke: rgb(var(--hc))" stroke-width="1.6"/>
+          <ellipse rx="26" ry="11" fill="none" stroke="rgba(255,255,255,0.70)" stroke-width="1.6" transform="rotate(-18)"/>
+          <circle r="18" fill="none" stroke="rgba(255,255,255,0.50)" stroke-width="1.6"/>
           <g class="splash-orbit">
-            <line x1="-18" y1="0" x2="-24" y2="0" style="stroke: rgb(var(--hc))" stroke-width="1.8"/>
-            <line x1="18" y1="0" x2="24" y2="0" style="stroke: rgb(var(--hc))" stroke-width="1.8"/>
+            <line x1="-18" y1="0" x2="-24" y2="0" stroke="rgba(255,255,255,0.50)" stroke-width="1.8"/>
+            <line x1="18" y1="0" x2="24" y2="0" stroke="rgba(255,255,255,0.50)" stroke-width="1.8"/>
           </g>
-          <circle r="3.5" style="fill: rgb(var(--hc))"/>
-          <circle r="1.4" cx="-0.7" cy="-0.7" style="fill: var(--page-bg)"/>
+          <circle r="3.5" fill="rgba(255,255,255,0.90)"/>
+          <circle r="1.4" cx="-0.7" cy="-0.7" fill="rgba(0,0,0,0.20)"/>
         </g>
         <g text-anchor="middle">
-          <text x="100" y="74" font-size="24" font-weight="800" letter-spacing="6" style="fill: rgb(var(--hc))">MEMO</text>
-          <text x="100" y="100" font-size="24" font-weight="800" letter-spacing="6" style="fill: rgb(var(--hc))">HAUS</text>
+          <text x="100" y="74" font-size="24" font-weight="800" letter-spacing="6" fill="rgba(255,255,255,0.95)">MEMO</text>
+          <text x="100" y="100" font-size="24" font-weight="800" letter-spacing="6" fill="rgba(255,255,255,0.95)">HAUS</text>
         </g>
       </svg>
-      <button type="button" id="splash-start-btn" class="splash-start-btn">Step Into Memory</button>
     </div>
 
-    <label class="theme-switch" aria-label="Toggle light/dark mode">
-      <input type="checkbox" id="theme-switch-input" />
-      <span class="theme-switch-track"><span class="theme-switch-knob"></span></span>
-    </label>
-    <button type="button" id="fullscreen-toggle-btn" class="fullscreen-toggle-btn" aria-label="Toggle fullscreen">⛶</button>
-    <main class="upload-card">
-      <header class="upload-header">
-        <svg class="upload-logo" viewBox="0 0 200 108" role="img" aria-label="Memo-Haus">
-          <g transform="translate(100,32)">
-            <ellipse rx="26" ry="11" fill="none" style="stroke: rgb(var(--hc))" stroke-width="1.6" transform="rotate(-18)"/>
-            <circle r="18" fill="none" style="stroke: rgb(var(--hc))" stroke-width="1.6"/>
-            <g class="splash-orbit">
-              <line x1="-18" y1="0" x2="-24" y2="0" style="stroke: rgb(var(--hc))" stroke-width="1.8"/>
-              <line x1="18" y1="0" x2="24" y2="0" style="stroke: rgb(var(--hc))" stroke-width="1.8"/>
-            </g>
-            <circle r="3.5" style="fill: rgb(var(--hc))"/>
-            <circle r="1.4" cx="-0.7" cy="-0.7" style="fill: var(--page-bg)"/>
-          </g>
-          <g text-anchor="middle">
-            <text x="100" y="74" font-size="24" font-weight="800" letter-spacing="6" style="fill: rgb(var(--hc))">MEMO</text>
-            <text x="100" y="100" font-size="24" font-weight="800" letter-spacing="6" style="fill: rgb(var(--hc))">HAUS</text>
-          </g>
-        </svg>
-        <p class="caption-tagline">From Archive To Participatory Experience</p>
-        <p>Share a photo from your Wolfsburg archive and watch it come alive as an immersive 3D scene.</p>
-        <p class="terminal-line">MEMORY UPLINK ESTABLISHED <span class="blink-cursor">█</span></p>
-      </header>
 
-      <form id="upload-form" class="upload-form">
-        <label class="dropzone" id="dropzone">
-          <input id="file-input" type="file" accept="image/*" multiple required />
+    <!-- Top tab bar -->
+    <nav class="tab-bar">
+      <button class="tab-btn active" data-tab="preserve">preserve</button>
+      <button class="tab-btn" data-tab="navigate">navigate</button>
+      <button class="tab-btn" data-tab="memoverse">memoverse</button>
+      <a href="/presentation/index.html" target="_blank" rel="noopener" class="tab-btn">about</a>
+    </nav>
+
+    <!-- Tab panels -->
+    <div class="tab-panels">
+
+      <!-- ── PRESERVE ─────────────────────────────────── -->
+      <div id="tab-preserve" class="tab-panel active">
+
+        <!-- Organic photo portal -->
+        <label id="dropzone" class="photo-portal" for="file-input">
+          <input id="file-input" type="file" accept="image/*" multiple class="visually-hidden" />
           <img id="image-preview" alt="" />
-          <span id="dropzone-hint" class="dropzone-hint">
-            <strong>Tap to choose one or more photos</strong>
-          </span>
-          <span class="corner corner-tl"></span>
-          <span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span>
-          <span class="corner corner-br"></span>
+          <div id="dropzone-hint" class="portal-hint">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <circle cx="14" cy="14" r="13" stroke="rgba(255,255,255,0.35)" stroke-width="1.2" stroke-dasharray="3 4"/>
+              <line x1="14" y1="7" x2="14" y2="21" stroke="rgba(255,255,255,0.50)" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="7" y1="14" x2="21" y2="14" stroke="rgba(255,255,255,0.50)" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span>add a memory</span>
+          </div>
           <span class="scan-sweep" id="scan-sweep"></span>
-          <span class="scan-label" id="scan-label">ANALYZING IMAGE…</span>
+          <span class="scan-label" id="scan-label">reading image</span>
         </label>
 
-        <!-- Shown only when 2+ photos are selected — one row per photo -->
         <div id="batch-list" class="batch-list hidden"></div>
 
-        <label class="field">
-          <span class="field-label-row"><span class="field-index">01</span>Title this memory <i class="field-dot" id="dot-name"></i></span>
-          <input id="name-input" type="text" placeholder="e.g. Rathaus, 1962" maxlength="80" />
-        </label>
+        <!-- Ghost form (all field IDs preserved for upload.js) -->
+        <form id="upload-form" class="preserve-form" autocomplete="off">
 
-        <label class="field">
-          <span class="field-label-row"><span class="field-index">02</span>Memory keeper <i class="field-dot" id="dot-author"></i></span>
-          <input id="author-input" type="text" placeholder="e.g. Anna" maxlength="60" />
-        </label>
-
-        <label class="field" id="year-field">
-          <span class="field-label-row"><span class="field-index">03</span>When it happened <i class="field-dot" id="dot-year"></i></span>
-          <input id="year-input" type="text" placeholder="e.g. 1987" maxlength="10" inputmode="numeric" />
-        </label>
-
-        <label class="field">
-          <span class="field-label-row"><span class="field-index">04</span>Narrate your memory <i class="field-dot" id="dot-story"></i></span>
-          <textarea id="story-input" placeholder="A short memory behind this photo…" maxlength="280" rows="3"></textarea>
-          <span class="char-counter" id="char-counter">0 / 280</span>
-        </label>
-
-        <div class="field audio-field">
-          <span class="field-label-row"><span class="field-index">05</span>Add sound (optional) <i class="field-dot" id="dot-audio"></i></span>
-          <p class="audio-hint">Plays for as long as this memory is on screen — clips are capped at 1:00 to match.</p>
-
-          <div id="audio-empty" class="audio-options">
-            <button type="button" id="record-voice-btn" class="audio-option-btn">Record Voice</button>
-            <button type="button" id="browse-music-btn" class="audio-option-btn">Browse Music</button>
-            <button type="button" id="upload-audio-btn" class="audio-option-btn">Upload Audio</button>
-            <input type="file" id="audio-file-input" accept="audio/*" class="visually-hidden" />
+          <div class="ghost-field" id="year-field">
+            <input id="year-input" class="ghost-input" type="text" placeholder="when" maxlength="10" inputmode="numeric" />
+            <i class="field-dot" id="dot-year"></i>
           </div>
 
-          <div id="audio-recording" class="audio-panel hidden">
-            <p class="audio-status-text"><span class="rec-dot"></span> Recording… <span id="record-timer">0:00</span> / 1:00</p>
-            <div class="record-progress-track"><div class="record-progress-fill" id="record-progress-fill"></div></div>
-            <button type="button" id="stop-record-btn" class="audio-option-btn">⏹ Stop</button>
+          <div class="ghost-field">
+            <input id="name-input" class="ghost-input" type="text" placeholder="name this memory" maxlength="80" />
+            <i class="field-dot" id="dot-name"></i>
           </div>
 
-          <div id="audio-preview" class="audio-panel hidden">
-            <audio id="audio-preview-player" controls></audio>
-            <div class="audio-panel-actions">
-              <button type="button" id="remove-audio-btn" class="audio-remove-btn">Remove</button>
+          <div class="ghost-field">
+            <input id="author-input" class="ghost-input" type="text" placeholder="your name" maxlength="60" />
+            <i class="field-dot" id="dot-author"></i>
+          </div>
+
+          <div class="ghost-field">
+            <textarea id="story-input" class="ghost-input ghost-textarea" placeholder="what do you remember…" maxlength="280" rows="2"></textarea>
+            <i class="field-dot" id="dot-story"></i>
+            <span class="char-counter" id="char-counter">0 / 280</span>
+          </div>
+
+          <!-- Audio -->
+          <div class="audio-section">
+            <div id="audio-empty" class="audio-options ghost-audio-row">
+              <button type="button" id="record-voice-btn" class="audio-pill">Voice</button>
+              <button type="button" id="browse-music-btn" class="audio-pill">Music</button>
+              <button type="button" id="upload-audio-btn" class="audio-pill">Audio</button>
+              <input type="file" id="audio-file-input" accept="audio/*" class="visually-hidden" />
+              <i class="field-dot" id="dot-audio"></i>
             </div>
-          </div>
 
-          <div id="music-browser" class="audio-panel hidden">
-            <div class="music-search-row">
-              <input type="text" id="music-search-input" placeholder="Search any language — song, mood, artist…" />
-              <button type="button" id="music-search-btn">Search</button>
+            <div id="audio-recording" class="audio-panel hidden">
+              <p class="audio-status-text"><span class="rec-dot"></span> Recording… <span id="record-timer">0:00</span> / 1:00</p>
+              <div class="record-progress-track"><div class="record-progress-fill" id="record-progress-fill"></div></div>
+              <button type="button" id="stop-record-btn" class="audio-pill">⏹ Stop</button>
             </div>
-            <p class="music-note">Searches free, openly-licensed tracks from around the world — mainstream copyrighted songs won't appear.</p>
-            <div id="music-results" class="music-results"></div>
-            <button type="button" id="close-music-browser-btn" class="audio-remove-btn">Cancel</button>
-          </div>
 
-          <div id="music-crop" class="audio-panel hidden">
-            <p class="audio-status-text" id="crop-track-title"></p>
-            <audio id="crop-player"></audio>
-
-            <div class="waveform-wrap" id="waveform-wrap">
-              <canvas id="waveform-canvas" width="560" height="64"></canvas>
-              <div class="crop-box" id="crop-box">
-                <div class="crop-handle crop-handle-left" id="crop-handle-left"></div>
-                <div class="crop-handle crop-handle-right" id="crop-handle-right"></div>
+            <div id="audio-preview" class="audio-panel hidden">
+              <audio id="audio-preview-player" controls></audio>
+              <div class="audio-panel-actions">
+                <button type="button" id="remove-audio-btn" class="audio-remove-btn">Remove</button>
               </div>
-              <div class="crop-playhead hidden" id="crop-playhead"></div>
             </div>
 
-            <p class="crop-range-label">
-              <span id="crop-start-label">0:00</span> – <span id="crop-end-label">0:00</span>
-              &nbsp;·&nbsp;<span id="crop-duration-label">0s</span> / 1:00 max
-            </p>
+            <div id="music-browser" class="audio-panel hidden">
+              <div class="music-search-row">
+                <input type="text" id="music-search-input" placeholder="search music…" />
+                <button type="button" id="music-search-btn">Search</button>
+              </div>
+              <p class="music-note">Free, openly-licensed tracks — mainstream songs won't appear.</p>
+              <div id="music-results" class="music-results"></div>
+              <button type="button" id="close-music-browser-btn" class="audio-remove-btn">Cancel</button>
+            </div>
 
-            <div class="audio-panel-actions">
-              <button type="button" id="preview-crop-btn">▶ Preview</button>
-              <button type="button" id="confirm-crop-btn">Use this clip</button>
-              <button type="button" id="cancel-crop-btn" class="audio-remove-btn">Cancel</button>
+            <div id="music-crop" class="audio-panel hidden">
+              <p class="audio-status-text" id="crop-track-title"></p>
+              <audio id="crop-player"></audio>
+              <div class="waveform-wrap" id="waveform-wrap">
+                <canvas id="waveform-canvas" width="560" height="64"></canvas>
+                <div class="crop-box" id="crop-box">
+                  <div class="crop-handle crop-handle-left" id="crop-handle-left"></div>
+                  <div class="crop-handle crop-handle-right" id="crop-handle-right"></div>
+                </div>
+                <div class="crop-playhead hidden" id="crop-playhead"></div>
+              </div>
+              <p class="crop-range-label">
+                <span id="crop-start-label">0:00</span> – <span id="crop-end-label">0:00</span>
+                &nbsp;·&nbsp;<span id="crop-duration-label">0s</span> / 1:00 max
+              </p>
+              <div class="audio-panel-actions">
+                <button type="button" id="preview-crop-btn">▶ Preview</button>
+                <button type="button" id="confirm-crop-btn">Use this clip</button>
+                <button type="button" id="cancel-crop-btn" class="audio-remove-btn">Cancel</button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <button id="upload-button" type="submit" disabled>Initiate Reconstruction</button>
-        <p id="status" class="status" role="status"></p>
-      </form>
+          <p id="status" class="status ghost-status" role="status"></p>
 
-      <footer class="upload-footer">
-        <a href="/memories.html" class="footer-pill">Memories</a>
-        <a href="/viewer.html" target="_blank" rel="noopener" class="footer-pill">Live Viewer</a>
-        <a href="/presentation/index.html" target="_blank" rel="noopener" class="footer-pill">About</a>
-      </footer>
-
-      <!-- Reconstruction overlay — the photo decoding into spatial memory -->
-      <div id="generating-overlay" class="generating-overlay hidden">
-        <div class="gen-stage">
-          <div class="gen-mark-simple">
-            <span class="gen-dot"></span>
-          </div>
-        </div>
-        <p class="gen-percent" id="gen-percent">0%</p>
-        <p class="gen-batch hidden" id="gen-batch"></p>
-        <p class="gen-text"><span id="gen-text-content">DECODING LIGHT PATTERNS</span><span class="blink-cursor">█</span></p>
+          <!-- Hidden submit — upload.js controls disabled state here -->
+          <button id="upload-button" type="submit" class="visually-hidden" disabled>preserve</button>
+        </form>
       </div>
-    </main>
 
-    <div id="cursor-reticle" class="cursor-reticle">
-      <span class="cursor-ring"></span>
-      <span class="cursor-dot"></span>
+      <!-- ── NAVIGATE ──────────────────────────────────── -->
+      <div id="tab-navigate" class="tab-panel">
+        <div class="nav-panel">
+
+          <!-- Top row: reset (left) + gyro (right) -->
+          <div class="nav-top-row">
+            <button id="nav-reset-btn" class="nav-icon-btn" title="Reset viewer position">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+              <span class="nav-icon-label">reset</span>
+            </button>
+
+            <button id="gyro-btn" class="nav-icon-btn" title="Toggle gyroscope">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M12 4.5 L14.2 11.5 L12 10 L9.8 11.5 Z" fill="currentColor" stroke="none"/>
+                <path d="M12 19.5 L9.8 12.5 L12 14 L14.2 12.5 Z" fill="currentColor" stroke="none" opacity="0.32"/>
+                <line x1="12" y1="3" x2="12" y2="5"/>
+                <line x1="12" y1="19" x2="12" y2="21"/>
+              </svg>
+              <span class="nav-icon-label">gyro</span>
+            </button>
+          </div>
+
+          <!-- Main controls: MOVE + LOOK stacked, ALT alongside -->
+          <div class="nav-main">
+            <div class="nav-sticks-col">
+              <div class="stick-group">
+                <div class="stick-ring" id="move-stick">
+                  <div class="stick-knob" id="move-knob"></div>
+                </div>
+                <div class="stick-label">move</div>
+              </div>
+
+              <div class="stick-group">
+                <div class="stick-ring" id="look-stick">
+                  <div class="stick-knob" id="look-knob"></div>
+                </div>
+                <div class="stick-label">look</div>
+              </div>
+            </div>
+
+            <div class="alt-group">
+              <div class="alt-track" id="alt-track">
+                <div class="alt-thumb" id="alt-thumb"></div>
+                <div class="alt-center-mark"></div>
+              </div>
+              <div class="stick-label">alt</div>
+            </div>
+          </div>
+
+          <p class="nav-status" id="nav-status">touch to navigate the viewer</p>
+        </div>
+      </div>
+
+      <!-- ── MEMOVERSE ─────────────────────────────────── -->
+      <div id="tab-memoverse" class="tab-panel">
+        <div class="verse-panel">
+          <p class="verse-hint" id="verse-hint">loading memories…</p>
+          <div class="verse-list" id="verse-list"></div>
+        </div>
+      </div>
+
+    </div><!-- /tab-panels -->
+
+    <!-- Generating overlay (fixed, full-screen) -->
+    <div id="generating-overlay" class="generating-overlay hidden">
+      <div class="gen-stage">
+        <div class="gen-mark-simple"><span class="gen-dot"></span></div>
+      </div>
+      <p class="gen-percent" id="gen-percent">0%</p>
+      <p class="gen-batch hidden" id="gen-batch"></p>
+      <p class="gen-text"><span id="gen-text-content">building your memory</span></p>
     </div>
 
+    <!-- Verse action bar (above bottom bar, for memoverse) -->
+    <div class="verse-bar hidden" id="verse-bar">
+      <span id="verse-count">0 selected</span>
+      <button type="button" id="verse-clear" class="verse-clear-btn">clear</button>
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="bottom-bar" id="bottom-bar">
+      <!-- Visible preserve action (proxied to hidden #upload-button inside the form) -->
+      <button id="preserve-action-btn" type="button" class="action-btn" disabled>preserve</button>
+      <!-- Memoverse launch action (hidden except in memoverse with selection) -->
+      <button id="verse-launch" type="button" class="action-btn" style="display:none">enter memoverse</button>
+    </div>
+
+    <script>
+      (function () {
+        var canvas = document.getElementById("particle-canvas");
+        if (!canvas) return;
+        var ctx = canvas.getContext("2d");
+        var W, H;
+
+        function parseRgb(str) {
+          var m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+          return m ? [+m[1], +m[2], +m[3]] : [128, 128, 128];
+        }
+
+        var rawColors = window.__memoFluidColors || ['rgba(68,138,95,0.68)', 'rgba(48,98,168,0.65)', 'rgba(138,112,58,0.52)', 'rgba(52,128,112,0.48)'];
+        var COLORS = rawColors.map(parseRgb);
+        COLORS.push(COLORS[0]);
+        COLORS.push(COLORS[1]);
+
+        var ORB_KEYS = ['.orb-a','.orb-b','.orb-c','.orb-d','.orb-e','.orb-f'];
+        var orbEls = ORB_KEYS.map(function(s){ return document.querySelector(s); });
+
+        function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+
+        function orbCenter(el) {
+          if (!el) return { x: W*0.5, y: H*0.5 };
+          var r = el.getBoundingClientRect();
+          return {
+            x: Math.max(-W*0.15, Math.min(W*1.15, r.left + r.width*0.5)),
+            y: Math.max(-H*0.15, Math.min(H*1.15, r.top + r.height*0.5)),
+            spawnR: Math.min(r.width, r.height) * 0.18
+          };
+        }
+
+        function Particle(orbIdx) { this.init(orbIdx); }
+        Particle.prototype.init = function(orbIdx) {
+          this.orbIdx = (orbIdx !== undefined) ? orbIdx : (Math.random() < 0.15 ? (4 + Math.floor(Math.random()*2)) : Math.floor(Math.random()*4));
+          var c = orbCenter(orbEls[this.orbIdx]);
+          var angle = Math.random() * Math.PI * 2;
+          var ring = (c.spawnR || 60) * (0.8 + Math.random() * 0.6);
+          this.x = c.x + Math.cos(angle) * ring;
+          this.y = c.y + Math.sin(angle) * ring;
+          var speed = 0.028 + Math.random() * 0.042;
+          this.vx = Math.cos(angle) * speed + (Math.random()-0.5) * 0.02;
+          this.vy = Math.sin(angle) * speed + (Math.random()-0.5) * 0.02;
+          this.color = COLORS[this.orbIdx] || COLORS[0];
+          this.r = Math.random() * 0.9 + 0.2;
+          this.baseAlpha = Math.random() * 0.38 + 0.08;
+          this.phase = Math.random() * Math.PI * 2;
+          this.phaseV = 0.00015 + Math.random() * 0.00025;
+          this.life = 0;
+          this.maxLife = 480 + Math.random() * 620;
+        };
+        Particle.prototype.update = function(t) {
+          this.x += this.vx + Math.sin(t * this.phaseV + this.phase) * 0.06;
+          this.y += this.vy + Math.cos(t * this.phaseV * 0.8 + this.phase) * 0.06;
+          this.life++;
+          if (this.life > this.maxLife || this.x < -50 || this.x > W+50 || this.y < -50 || this.y > H+50) this.init();
+        };
+        Particle.prototype.draw = function() {
+          var fi = Math.min(this.life / 60, 1);
+          var fo = Math.min((this.maxLife - this.life) / 60, 1);
+          var a = this.baseAlpha * fi * fo;
+          if (a < 0.008) return;
+          var c = this.color;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')';
+          ctx.fill();
+        };
+
+        resize();
+        var N = Math.min(140, Math.floor(W * H / 7000));
+        var particles = [];
+        for (var i = 0; i < N; i++) particles.push(new Particle(i % 6));
+
+        var t = 0;
+        function animate() {
+          ctx.clearRect(0, 0, W, H);
+          t++;
+          for (var i = 0; i < particles.length; i++) { particles[i].update(t); particles[i].draw(); }
+          requestAnimationFrame(animate);
+        }
+        window.addEventListener('resize', resize);
+        animate();
+      })();
+    </script>
     <script type="module" src="/src/upload.js"></script>
   </body>
 </html>

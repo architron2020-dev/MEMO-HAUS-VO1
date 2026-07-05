@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 
 import requests
@@ -56,6 +57,10 @@ _selected_at: float = 0.0
 _world_selected_ids: list[str] = []
 _world_selected_at: float = 0.0
 
+_nav_lock = threading.Lock()
+_nav_state: dict = {"move_x":0,"move_z":0,"move_y":0,"turn_x":0,"turn_y":0,"gyro":False,"gyro_yaw":None,"gyro_pitch":None,"ts":0}
+_reset_ts: float = 0.0
+
 
 class SelectScenePayload(BaseModel):
     scene_id: str
@@ -63,6 +68,18 @@ class SelectScenePayload(BaseModel):
 
 class WorldSelectionPayload(BaseModel):
     scene_ids: list[str]
+
+
+class NavPayload(BaseModel):
+    move_x: float = 0
+    move_z: float = 0
+    move_y: float = 0
+    turn_x: float = 0
+    turn_y: float = 0
+    gyro: bool = False
+    gyro_yaw: float | None = None
+    gyro_pitch: float | None = None
+    ts: float = 0
 
 app = FastAPI(title="Memo-House API")
 app.add_middleware(
@@ -140,6 +157,34 @@ def set_world_selection(payload: WorldSelectionPayload) -> dict:
 def get_world_selection() -> dict:
     with _selection_lock:
         return {"scene_ids": _world_selected_ids, "selected_at": _world_selected_at}
+
+
+@app.post("/api/navigate")
+def set_navigate(payload: NavPayload) -> dict:
+    global _nav_state
+    data = payload.model_dump()
+    data["ts"] = time.time() * 1000  # server-side timestamp avoids mobile/desktop clock skew
+    with _nav_lock:
+        _nav_state = data
+    return {"ok": True}
+
+
+@app.get("/api/navigate")
+def get_navigate() -> dict:
+    with _nav_lock:
+        return dict(_nav_state)
+
+
+@app.post("/api/reset-view")
+def post_reset_view() -> dict:
+    global _reset_ts
+    _reset_ts = time.time() * 1000
+    return {"ok": True, "ts": _reset_ts}
+
+
+@app.get("/api/reset-view")
+def get_reset_view() -> dict:
+    return {"ts": _reset_ts}
 
 
 @app.delete("/api/scenes/{scene_id}")
@@ -266,7 +311,16 @@ def predict(
         engine.predict_to_ply(upload_path, ply_path)
     except Exception as exc:
         LOGGER.exception("Inference failed for scene %s", scene_id)
-        raise HTTPException(status_code=500, detail=f"Inference failed: {exc}") from exc
+        msg = str(exc)
+        if "out of memory" in msg.lower() or "cuda error" in msg.lower():
+            detail = (
+                "GPU out of memory. Please restart the API server — "
+                "the updated code loads the model in fp16 (half memory) and "
+                "automatically falls back to CPU if needed."
+            )
+        else:
+            detail = f"Inference failed: {exc}"
+        raise HTTPException(status_code=500, detail=detail) from exc
     finally:
         _processing.clear()
 

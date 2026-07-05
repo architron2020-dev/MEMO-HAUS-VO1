@@ -31,7 +31,7 @@ const args = [
   "uvicorn",
   "main:app",
   "--host",
-  "127.0.0.1",
+  "0.0.0.0",
   "--port",
   port,
   // NOTE: --reload was tried here but its WatchFiles supervisor/worker

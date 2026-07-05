@@ -62,22 +62,12 @@ export function initCursor() {
   }
 }
 
-// Intro splash — sits in front of everything until the visitor actually
-// taps through it. Deliberately not a timed auto-fade: a kiosk/shared-device
-// app should wait for a real gesture, not assume everyone reads at the
-// same pace.
+// Intro splash — shows logo/name briefly, then auto-fades. No button needed.
 export function initSplash() {
   const splash = document.getElementById("app-splash");
-  const btn = document.getElementById("splash-start-btn");
-  if (!splash || !btn) return;
-  btn.addEventListener("click", () => {
-    splash.classList.add("hidden");
-    // Must happen inside this click handler — fullscreen requests are only
-    // honoured directly off a user gesture. Some mobile browsers (notably
-    // iOS Safari) don't support it at all, so a rejection here is expected
-    // and harmless; the app works the same either way.
-    document.documentElement.requestFullscreen?.().catch(() => {});
-  });
+  if (!splash) return;
+  // Brief logo moment, then fade out automatically
+  setTimeout(() => splash.classList.add("hidden"), 1800);
 }
 
 // Manual fullscreen toggle — a fallback for when the splash auto-request

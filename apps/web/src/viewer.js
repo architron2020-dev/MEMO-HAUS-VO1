@@ -23,9 +23,6 @@ const overlayStoryTextEl = document.getElementById("overlay-story-text");
 // sceneAudioEl kept in DOM but audio is now routed through Web Audio for spatialization
 const sceneAudioEl       = document.getElementById("scene-audio");
 const cursorReticleEl    = document.getElementById("cursor-reticle");
-const navHintTabEl       = document.getElementById("nav-hint-tab");
-const navHintPanelEl     = document.getElementById("nav-hint-panel");
-const navHintCloseEl     = document.getElementById("nav-hint-close");
 const worldModeBtnEl     = document.getElementById("world-mode-btn");
 const worldDebugEl       = document.getElementById("world-debug");
 
@@ -66,8 +63,8 @@ function stopSceneAudio(sceneId) {
   const entry = _activeSources.get(sceneId);
   if (!entry) return;
   try { entry.source.stop(); } catch {}
-  try { entry.panner.disconnect(); } catch {}
   try { entry.gainNode.disconnect(); } catch {}
+  try { entry.stereoPanner.disconnect(); } catch {}
   _activeSources.delete(sceneId);
 }
 
@@ -86,36 +83,24 @@ async function playSceneAudio(scene, worldPos) {
   const buf = await _fetchAudioBuffer(scene.audio_url);
   if (!buf) return;
 
-  // PannerNode handles ONLY left/right angle panning — distance volume is
-  // driven manually below so every browser and audio type gets the same result.
-  const panner = ctx.createPanner();
-  panner.panningModel  = "equalpower"; // broadest device support for angle pan
-  panner.distanceModel = "linear";
-  panner.refDistance   = 1;
-  panner.maxDistance   = 1;           // distance rolloff disabled on panner
-  panner.rolloffFactor = 0;           // all volume control goes through gainNode
-  if (panner.positionX) {
-    panner.positionX.value = worldPos[0];
-    panner.positionY.value = worldPos[1];
-    panner.positionZ.value = worldPos[2];
-  } else {
-    panner.setPosition(worldPos[0], worldPos[1], worldPos[2]);
-  }
-
-  // GainNode that we update every frame based on camera distance → smooth,
-  // dramatic intensity changes for voice, music, and background audio alike.
+  // GainNode — distance-based volume, driven per-frame by updateSpatialAudio().
   const gainNode = ctx.createGain();
   gainNode.gain.value = 1.0;
+
+  // StereoPannerNode — L/R panning driven per-frame by projecting the source
+  // direction onto the camera's right vector, so it tracks gyro and look turns.
+  const stereoPanner = ctx.createStereoPanner();
+  stereoPanner.pan.value = 0;
 
   const source = ctx.createBufferSource();
   source.buffer = buf;
   source.loop   = true;
-  source.connect(panner);
-  panner.connect(gainNode);
-  gainNode.connect(ctx.destination);
+  source.connect(gainNode);
+  gainNode.connect(stereoPanner);
+  stereoPanner.connect(ctx.destination);
   source.start();
 
-  _activeSources.set(scene.id, { source, panner, gainNode, worldPos: [...worldPos] });
+  _activeSources.set(scene.id, { source, gainNode, stereoPanner, worldPos: [...worldPos] });
 }
 
 // ── Per-frame spatial audio update ────────────────────────────────────────
@@ -130,33 +115,31 @@ const AUDIO_SMOOTH   = 0.12; // AudioParam time-constant (seconds) for ramping
 function updateSpatialAudio() {
   const cam = viewer?.camera;
   if (!_audioCtx || !cam) return;
-
-  // Keep the context alive — resume if the browser suspended it
   if (_audioCtx.state === "suspended") { _audioCtx.resume().catch(() => {}); return; }
 
-  // ── Listener position + orientation (drives L/R pan) ──────────────────
   const { x, y, z } = cam.position;
   const m = cam.matrixWorld.elements;
-  const fwdX = -m[8], fwdY = -m[9], fwdZ = -m[10];
-  const upX  =  m[4], upY  =  m[5], upZ  =  m[6];
-  const L = _audioCtx.listener;
-  if (L.positionX) {
-    L.positionX.value = x;    L.positionY.value = y;    L.positionZ.value = z;
-    L.forwardX.value  = fwdX; L.forwardY.value  = fwdY; L.forwardZ.value  = fwdZ;
-    L.upX.value       = upX;  L.upY.value       = upY;  L.upZ.value       = upZ;
-  } else {
-    L.setPosition(x, y, z);
-    L.setOrientation(fwdX, fwdY, fwdZ, upX, upY, upZ);
-  }
+  // Camera right vector (column 0 of world matrix) — the key for L/R panning.
+  // dot(dir_to_source, rightVec) > 0 means source is to the right → pan right.
+  const rightX = m[0], rightY = m[1], rightZ = m[2];
 
-  // ── Per-source distance gain (drives volume intensity) ─────────────────
   const now = _audioCtx.currentTime;
-  for (const { gainNode, worldPos } of _activeSources.values()) {
-    const dist = Math.hypot(x - worldPos[0], y - worldPos[1], z - worldPos[2]);
-    // Inverse-power curve: full volume within REF_DIST, fades to ~0 at MAX_DIST
+  for (const { gainNode, stereoPanner, worldPos } of _activeSources.values()) {
+    const dx = worldPos[0] - x;
+    const dy = worldPos[1] - y;
+    const dz = worldPos[2] - z;
+    const dist = Math.hypot(dx, dy, dz) || 0.001;
+
+    // Distance gain: inverse-power curve, full within REF_DIST, ~0 at MAX_DIST
     const clamped = Math.max(AUDIO_REF_DIST, Math.min(dist, AUDIO_MAX_DIST));
-    const gain    = Math.pow(AUDIO_REF_DIST / clamped, 1.6);
-    gainNode.gain.setTargetAtTime(gain, now, AUDIO_SMOOTH);
+    gainNode.gain.setTargetAtTime(Math.pow(AUDIO_REF_DIST / clamped, 1.6), now, AUDIO_SMOOTH);
+
+    // L/R stereo pan: project source direction onto camera right axis.
+    // Responds directly to gyro yaw and look-joystick turns from mobile.
+    const pan = Math.max(-1, Math.min(1,
+      (dx / dist) * rightX + (dy / dist) * rightY + (dz / dist) * rightZ
+    ));
+    stereoPanner.pan.setTargetAtTime(pan, now, AUDIO_SMOOTH);
   }
 }
 
@@ -637,11 +620,14 @@ viewerEl.addEventListener("pointerup", e => {
       const target = findNearestWorldSceneAndId(e.clientX, e.clientY);
       if (target) focusWorldScene(target.id, target.pos);
       else flyToWorldOverview();
-    } else {
-      resetCamera();
     }
+    // Single tap no longer resets camera — use double-click to reset
   }
   _dragging = false;
+});
+
+viewerEl.addEventListener("dblclick", () => {
+  if (!worldMode) resetCamera();
 });
 
 // Scroll = move forward / backward along look direction
@@ -1276,15 +1262,8 @@ function toggleFullscreen() {
 document.addEventListener("pointerdown", enterFullscreen, { once: true });
 document.addEventListener("keydown", enterFullscreen, { once: true });
 
-// The intro splash's Start button is the explicit version of that same
-// gesture — also dismisses the placeholder immediately rather than waiting
-// for a scene to load, in case scenes are already loaded and it just never
-// got hidden (or there simply aren't any yet).
-const splashStartBtn = document.getElementById("splash-start-btn");
-splashStartBtn?.addEventListener("click", () => {
-  enterFullscreen();
-  placeholderEl.classList.add("hidden");
-});
+// Auto-dismiss the placeholder after a brief logo moment
+setTimeout(() => placeholderEl?.classList.add("hidden"), 2000);
 
 // Manual toggle for testing/operator use
 document.addEventListener("keydown", e => {
@@ -1305,9 +1284,147 @@ document.addEventListener("keyup", e => _keys.delete(e.code));
 const BASE_SPEED = 0.05;   // units per frame (~3 units/sec at 60fps)
 const TURN_SPEED = 0.032;  // radians per frame (~110°/sec at 60fps)
 
+// ── Remote navigation from mobile ─────────────────────────────────────────
+let _remoteNav = { move_x:0, move_z:0, move_y:0, turn_x:0, turn_y:0, gyro:false, gyro_yaw:null, gyro_pitch:null, ts:0 };
+
+(async function _pollRemoteNav() {
+  while (true) {
+    try {
+      const r = await fetch("/api/navigate", { cache: "no-store" });
+      if (r.ok) _remoteNav = await r.json();
+    } catch {}
+    await new Promise(res => setTimeout(res, 50));
+  }
+})();
+
+// Separate poll for reset-view signal from mobile
+let _lastResetTs = 0;
+(async function _pollResetView() {
+  while (true) {
+    try {
+      const r = await fetch("/api/reset-view", { cache: "no-store" });
+      if (r.ok) {
+        const { ts } = await r.json();
+        if (ts > _lastResetTs) {
+          _lastResetTs = ts;
+          if (!worldMode) resetCamera(); else flyToWorldOverview();
+        }
+      }
+    } catch {}
+    await new Promise(res => setTimeout(res, 100));
+  }
+})();
+
+// ── Distance-based LOD ────────────────────────────────────────────────────
+// Intent: walking INTO a scene → always full quality, no change.
+//         zooming OUT / stepping back far → scale reduces progressively.
+//
+// Single-scene mode: camera distance from scene origin.
+//   - Only degrades at large backing distances (>25 units).
+//   - Point-cloud mode never activates — user navigates inside the splat.
+//   - Fast quality restore when approaching, slow fade when retreating.
+//
+// Memory Verse mode: distance to the nearest scene in worldPositions.
+//   - Tighter thresholds because scenes are spread apart and the overview
+//     camera sits far from all of them intentionally.
+//   - Point-cloud mode activates when very far from every scene.
+
+const LOD_LERP_IN   = 0.12; // fast restore when approaching
+const LOD_LERP_OUT  = 0.025; // slow fade when retreating
+
+let _lodCurrentScale = 1.0;
+let _lodPCActive     = false;
+let _lodFrame        = 0;
+let _lodPrevDist     = 0;
+
+function lodScale(dist, near, far, minScale) {
+  if (dist <= near) return 1.0;
+  if (dist >= far)  return minScale;
+  const t = (dist - near) / (far - near);
+  return 1.0 - t * (1.0 - minScale);
+}
+
+function updateLOD() {
+  if (!viewer?.splatMesh) return;
+  const cam = viewer.camera;
+  if (!cam) return;
+  if (++_lodFrame % 3 !== 0) return;
+
+  const cx = cam.position.x, cy = cam.position.y, cz = cam.position.z;
+
+  let minDist, targetScale, wantPC;
+
+  if (worldMode && worldScenes.length > 0) {
+    // Memory Verse: distance to nearest scene
+    minDist = Infinity;
+    for (const s of worldScenes) {
+      const pos = worldPositions.get(s.id);
+      if (!pos) continue;
+      const d = Math.hypot(cx - pos[0], cy - pos[1], cz - pos[2]);
+      if (d < minDist) minDist = d;
+    }
+    if (!isFinite(minDist)) minDist = 0;
+    targetScale = lodScale(minDist, 5, 20, 0.10);
+    wantPC = minDist > 22;
+  } else {
+    // Single scene: camera distance from origin.
+    // Only count as "zooming out" — navigating inside the cloud keeps full quality.
+    minDist = Math.hypot(cx, cy, cz);
+    targetScale = lodScale(minDist, 10, 32, 0.20);
+    wantPC = false; // never collapse to particles while inside a scene
+  }
+
+  // Use fast lerp when approaching (quality restores quickly),
+  // slow lerp when retreating (fade is gradual, not sudden collapse)
+  const approaching = minDist < _lodPrevDist;
+  const lerp = approaching ? LOD_LERP_IN : LOD_LERP_OUT;
+  _lodPrevDist = minDist;
+
+  _lodCurrentScale += (targetScale - _lodCurrentScale) * lerp * 3;
+  viewer.splatMesh.setSplatScale(Math.max(0.10, _lodCurrentScale));
+
+  if (wantPC !== _lodPCActive) {
+    _lodPCActive = wantPC;
+    viewer.splatMesh.setPointCloudModeEnabled(wantPC);
+  }
+}
+
 function flyLoop() {
   requestAnimationFrame(flyLoop);
-  updateSpatialAudio();
+  updateLOD();
+
+  // Apply remote mobile navigation (joystick / gyro from mobile app)
+  {
+    const rn = _remoteNav;
+    const isRecent = rn.ts > 0 && (Date.now() - rn.ts < 600);
+    if (isRecent && viewer) {
+      const cam = viewer.camera;
+      if (cam) {
+        const hasAct = rn.move_x || rn.move_z || rn.move_y || rn.turn_x || rn.turn_y || rn.gyro;
+        if (hasAct) {
+          const m = cam.matrixWorld.elements;
+          const right   = { x: m[0],  y: m[1],  z: m[2]  };
+          const camUp   = { x: m[4],  y: m[5],  z: m[6]  };
+          const forward = { x: -m[8], y: -m[9], z: -m[10] };
+          let dx = 0, dy = 0, dz = 0;
+          const add = (v, s) => { dx += v.x*s; dy += v.y*s; dz += v.z*s; };
+          if (rn.move_z) add(forward, rn.move_z * BASE_SPEED);
+          if (rn.move_x) add(right,   rn.move_x * BASE_SPEED);
+          if (rn.move_y) add(camUp,   rn.move_y * BASE_SPEED);
+          if (rn.gyro && rn.gyro_yaw !== null) {
+            _yaw   = rn.gyro_yaw;
+            _pitch = Math.max(-1.30, Math.min(1.30, rn.gyro_pitch ?? 0));
+          } else {
+            if (rn.turn_x) { _yaw += rn.turn_x * TURN_SPEED; }
+            if (rn.turn_y) { _pitch -= rn.turn_y * TURN_SPEED; _pitch = Math.max(-1.30, Math.min(1.30, _pitch)); }
+          }
+          cam.position.x += dx; cam.position.y += dy; cam.position.z += dz;
+          applyFPSCamera();
+        }
+      }
+    }
+  }
+
   if (!viewer || _keys.size === 0) return;
 
   const cam = viewer.camera;
@@ -1348,40 +1465,16 @@ function flyLoop() {
     cam.position.z += dz;
     applyFPSCamera();  // re-apply look direction after position/yaw changes
   }
+
+  // Audio update runs last so it always reads the camera state for this frame
+  updateSpatialAudio();
 }
 
 flyLoop();
 
 // ── Keyboard nav hint: small tab, expands/closes on click ─────────────────
 
-navHintTabEl.addEventListener("click", () => navHintPanelEl.classList.toggle("hidden"));
-navHintCloseEl.addEventListener("click", () => navHintPanelEl.classList.add("hidden"));
 
-// ── Custom cursor ─────────────────────────────────────────────────────────
-// The native cursor is hidden globally (kiosk look) — this reticle div takes
-// its place, positioned directly from clientX/clientY on every move, so it's
-// always obvious exactly where a click will land.
-
-document.addEventListener("pointermove", e => {
-  cursorReticleEl.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
-  const overClickable = e.target.closest("button, a, [role='button']");
-  cursorReticleEl.classList.toggle("hoverable", !!overClickable);
-});
-
-document.addEventListener("pointerdown", e => {
-  cursorReticleEl.classList.add("pressed");
-  spawnClickPing(e.clientX, e.clientY);
-});
-document.addEventListener("pointerup", () => cursorReticleEl.classList.remove("pressed"));
-
-function spawnClickPing(x, y) {
-  const ping = document.createElement("div");
-  ping.className = "click-ping";
-  ping.style.left = `${x}px`;
-  ping.style.top  = `${y}px`;
-  document.body.appendChild(ping);
-  ping.addEventListener("animationend", () => ping.remove());
-}
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 

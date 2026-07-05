@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Memo-Haus: Presentation</title>
     <link rel="icon" id="pres-favicon" type="image/svg+xml" href="" />
     <link rel="stylesheet" href="style.css" />
@@ -26,6 +26,16 @@
     </script>
   </head>
   <body class="pres-body">
+    <!-- Fluid orb background — same animation system as mobile app -->
+    <div id="pres-fluid-bg" aria-hidden="true">
+      <div class="pres-orb pres-orb-a"></div>
+      <div class="pres-orb pres-orb-b"></div>
+      <div class="pres-orb pres-orb-c"></div>
+      <div class="pres-orb pres-orb-d"></div>
+      <div class="pres-orb pres-orb-e"></div>
+      <div class="pres-orb pres-orb-f"></div>
+    </div>
+
     <!-- Custom cursor, same flat filled-circle-plus-dot mark as the main app -->
     <div id="cursor-reticle" class="cursor-reticle">
       <span class="cursor-ring"></span>
@@ -48,7 +58,6 @@
         <a href="#mockup">mockup</a>
         <a href="#demo">demo</a>
       </span>
-      <button type="button" id="fullscreen-btn" class="pres-fullscreen-btn">⛶ Fullscreen</button>
     </nav>
 
     <div class="pres-dots" id="pres-dots"></div>

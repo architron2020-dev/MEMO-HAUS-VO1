@@ -1,15 +1,126 @@
 :root {
   --accent-pick: 100, 200, 255;
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
 
 .pres-body {
   margin: 0;
-  background: #0b0b0d;
+  background: #10121a;
   color: #0b0b0d;
   cursor: none;
+}
+
+/* ── Fluid orb background ─────────────────────────────────── */
+
+#pres-fluid-bg {
+  position: fixed;
+  inset: -25%;
+  z-index: 0;
+  background: #10121a;
+  overflow: hidden;
+  filter: blur(80px) saturate(1.5);
+  pointer-events: none;
+}
+
+.pres-orb {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+.pres-orb-a {
+  width: 88vmax; height: 88vmax;
+  background: radial-gradient(ellipse at 45% 45%, rgba(var(--accent-pick), 0.72) 0%, transparent 62%);
+  top: -24%; left: -20%;
+  animation: pres-orb-a 28s ease-in-out infinite;
+}
+
+.pres-orb-b {
+  width: 75vmax; height: 75vmax;
+  background: radial-gradient(ellipse at 55% 55%, rgba(50,100,170,0.80) 0%, transparent 62%);
+  bottom: -20%; right: -14%;
+  animation: pres-orb-b 34s ease-in-out infinite;
+}
+
+.pres-orb-c {
+  width: 58vmax; height: 58vmax;
+  background: radial-gradient(ellipse at 50% 50%, rgba(140,115,60,0.65) 0%, transparent 60%);
+  top: 35%; left: 48%;
+  animation: pres-orb-c 22s ease-in-out infinite;
+}
+
+.pres-orb-d {
+  width: 50vmax; height: 50vmax;
+  background: radial-gradient(ellipse at 50% 50%, rgba(55,130,115,0.62) 0%, transparent 60%);
+  top: 48%; left: 0%;
+  animation: pres-orb-d 30s ease-in-out infinite;
+}
+
+.pres-orb-e {
+  width: 40vmax; height: 40vmax;
+  background: radial-gradient(ellipse at 50% 50%, rgba(var(--accent-pick), 0.45) 0%, transparent 58%);
+  top: 20%; left: 30%;
+  animation: pres-orb-e 16s ease-in-out infinite;
+}
+
+.pres-orb-f {
+  width: 30vmax; height: 30vmax;
+  background: radial-gradient(ellipse at 50% 50%, rgba(50,100,170,0.40) 0%, transparent 58%);
+  top: 55%; left: 55%;
+  animation: pres-orb-f 12s ease-in-out infinite;
+}
+
+@keyframes pres-orb-a {
+  0%   { transform: translate(0,0) scale(1) rotate(0deg); border-radius: 55% 45% 52% 48% / 50% 52% 48% 50%; }
+  18%  { transform: translate(14%,10%) scale(1.10) rotate(12deg); border-radius: 40% 60% 62% 38% / 58% 44% 56% 42%; }
+  38%  { transform: translate(26%,20%) scale(1.20) rotate(-6deg); border-radius: 62% 38% 40% 60% / 45% 60% 40% 55%; }
+  55%  { transform: translate(20%,28%) scale(1.14) rotate(20deg); border-radius: 48% 52% 55% 45% / 60% 42% 58% 40%; }
+  72%  { transform: translate(10%,16%) scale(1.08) rotate(-14deg); border-radius: 58% 42% 48% 52% / 40% 56% 44% 60%; }
+  88%  { transform: translate(22%,8%) scale(1.18) rotate(8deg); border-radius: 44% 56% 58% 42% / 52% 46% 54% 48%; }
+  100% { transform: translate(0,0) scale(1) rotate(0deg); border-radius: 55% 45% 52% 48% / 50% 52% 48% 50%; }
+}
+
+@keyframes pres-orb-b {
+  0%   { transform: translate(0,0) scale(1.05) rotate(0deg); border-radius: 45% 55% 48% 52% / 52% 48% 52% 48%; }
+  20%  { transform: translate(-16%,-18%) scale(1.15) rotate(-10deg); border-radius: 60% 40% 55% 45% / 42% 58% 40% 60%; }
+  40%  { transform: translate(-26%,-10%) scale(1.22) rotate(16deg); border-radius: 38% 62% 45% 55% / 56% 44% 62% 38%; }
+  58%  { transform: translate(-18%,-24%) scale(1.18) rotate(-20deg); border-radius: 55% 45% 62% 38% / 48% 52% 42% 58%; }
+  76%  { transform: translate(-8%,-14%) scale(1.10) rotate(6deg); border-radius: 48% 52% 38% 62% / 60% 40% 56% 44%; }
+  100% { transform: translate(0,0) scale(1.05) rotate(0deg); border-radius: 45% 55% 48% 52% / 52% 48% 52% 48%; }
+}
+
+@keyframes pres-orb-c {
+  0%   { transform: translate(0,0) scale(0.92) rotate(0deg); border-radius: 52% 48% 55% 45% / 48% 55% 45% 52%; }
+  25%  { transform: translate(-22%,14%) scale(1.08) rotate(22deg); border-radius: 42% 58% 42% 58% / 60% 40% 58% 42%; }
+  50%  { transform: translate(-30%,6%) scale(1.15) rotate(-12deg); border-radius: 60% 40% 52% 48% / 44% 56% 48% 52%; }
+  75%  { transform: translate(-14%,20%) scale(1.05) rotate(18deg); border-radius: 48% 52% 60% 40% / 55% 45% 42% 58%; }
+  100% { transform: translate(0,0) scale(0.92) rotate(0deg); border-radius: 52% 48% 55% 45% / 48% 55% 45% 52%; }
+}
+
+@keyframes pres-orb-d {
+  0%   { transform: translate(0,0) scale(1) rotate(0deg); border-radius: 48% 52% 52% 48% / 55% 45% 55% 45%; }
+  22%  { transform: translate(20%,-22%) scale(0.90) rotate(-16deg); border-radius: 62% 38% 48% 52% / 42% 58% 48% 52%; }
+  44%  { transform: translate(28%,-10%) scale(0.85) rotate(8deg); border-radius: 40% 60% 58% 42% / 56% 44% 40% 60%; }
+  66%  { transform: translate(16%,-28%) scale(0.92) rotate(-24deg); border-radius: 55% 45% 42% 58% / 48% 52% 62% 38%; }
+  88%  { transform: translate(8%,-16%) scale(0.96) rotate(12deg); border-radius: 45% 55% 55% 45% / 60% 40% 52% 48%; }
+  100% { transform: translate(0,0) scale(1) rotate(0deg); border-radius: 48% 52% 52% 48% / 55% 45% 55% 45%; }
+}
+
+@keyframes pres-orb-e {
+  0%   { transform: translate(0,0) scale(1) rotate(0deg); border-radius: 50% 50% 50% 50%; }
+  33%  { transform: translate(35%,30%) scale(1.15) rotate(30deg); border-radius: 60% 40% 55% 45%; }
+  66%  { transform: translate(-20%,45%) scale(0.88) rotate(-20deg); border-radius: 40% 60% 45% 55%; }
+  100% { transform: translate(0,0) scale(1) rotate(0deg); border-radius: 50% 50% 50% 50%; }
+}
+
+@keyframes pres-orb-f {
+  0%   { transform: translate(0,0) scale(1); border-radius: 50% 50% 50% 50%; }
+  25%  { transform: translate(-40%,-20%) scale(1.20); border-radius: 65% 35% 40% 60%; }
+  50%  { transform: translate(15%,-35%) scale(0.85); border-radius: 38% 62% 60% 40%; }
+  75%  { transform: translate(-25%,20%) scale(1.10); border-radius: 55% 45% 38% 62%; }
+  100% { transform: translate(0,0) scale(1); border-radius: 50% 50% 50% 50%; }
 }
 
 /* ── Custom cursor — same flat filled-circle + dot as the main app ──────── */
@@ -1357,4 +1468,164 @@
 .pres-dot.active {
   background: rgb(var(--accent-pick));
   transform: scale(1.4);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK-THEME + RESPONSIVE OVERRIDE
+   Matches the mobile app & viewer: #1a1e2a base, white text, tranquil tone.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Font & base */
+html, .pres-body { font-family: inherit; }
+.pres-body { background: #10121a !important; color: rgba(255,255,255,0.88) !important; cursor: auto !important; }
+
+/* Side dots — white */
+.pres-dot { background: rgba(255,255,255,0.20) !important; cursor: auto !important; }
+.pres-dot.active { background: rgba(255,255,255,0.80) !important; }
+
+/* Cursor reticle hidden on mobile, minimal on desktop */
+.cursor-reticle { display: none; }
+
+/* ── Nav ───────────────────────────────────────────────── */
+.pres-nav {
+  background: rgba(10,12,20,0.72) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+  padding: 14px 20px !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  z-index: 10 !important;
+}
+.pres-nav-brand { color: rgba(255,255,255,0.90) !important; font-size: 0.82rem !important; }
+.pres-nav-links { gap: 14px !important; flex-wrap: wrap !important; }
+.pres-nav-links a { color: rgba(255,255,255,0.40) !important; }
+.pres-nav-links a:hover { color: rgba(255,255,255,0.85) !important; }
+.pres-nav-links a.active { color: rgba(255,255,255,0.95) !important; }
+.pres-fullscreen-btn { display: none !important; }
+
+/* ── Deck + dots above fluid bg ───────────────────────── */
+#pres-deck { position: relative !important; z-index: 1 !important; }
+.pres-dots { z-index: 5 !important; }
+
+/* ── Slide base ────────────────────────────────────────── */
+.pres-slide {
+  background: transparent !important;
+  color: rgba(255,255,255,0.88) !important;
+  padding: clamp(80px, 10vw, 100px) clamp(20px, 6vw, 60px) clamp(40px, 6vw, 60px) !important;
+}
+
+/* ── Hero ──────────────────────────────────────────────── */
+.pres-hero { flex-direction: column !important; }
+.pres-hero-top {
+  background: transparent !important;
+  padding: clamp(100px, 12vw, 160px) 20px 20px !important;
+}
+.pres-hero-title { color: rgba(255,255,255,0.92) !important; }
+.pres-hero-tag { color: rgba(255,255,255,0.45) !important; text-transform: none !important; letter-spacing: 0.06em !important; }
+.pres-hero-sub { color: rgba(255,255,255,0.55) !important; }
+.pres-hero-credit { color: rgba(255,255,255,0.28) !important; }
+.pres-hero-bottom { background: rgba(255,255,255,0.05) !important; }
+
+/* ── Typography ────────────────────────────────────────── */
+.pres-kicker { color: rgba(255,255,255,0.32) !important; letter-spacing: 0.08em !important; font-size: 0.65rem !important; }
+.pres-h2 { color: rgba(255,255,255,0.92) !important; }
+.pres-body-text { color: rgba(255,255,255,0.62) !important; line-height: 1.75 !important; }
+.pres-body-text strong { color: rgba(255,255,255,0.85) !important; }
+.pres-body-text-tight { color: rgba(255,255,255,0.80) !important; font-weight: 700 !important; }
+
+/* ── Steps ─────────────────────────────────────────────── */
+.pres-steps { padding-left: 0 !important; }
+.pres-step-num { color: rgba(255,255,255,0.25) !important; }
+.pres-step-text { color: rgba(255,255,255,0.72) !important; }
+
+/* ── Tech tags ─────────────────────────────────────────── */
+.pres-tag {
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  color: rgba(255,255,255,0.72) !important;
+  cursor: auto !important;
+}
+.pres-tag:hover, .pres-tag.active {
+  background: rgba(255,255,255,0.14) !important;
+  color: white !important;
+  border-color: rgba(255,255,255,0.30) !important;
+}
+.pres-tag-desc { color: rgba(255,255,255,0.55) !important; }
+
+/* ── Contrast panel ────────────────────────────────────── */
+.pres-contrast-side {
+  background: rgba(255,255,255,0.05) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+.pres-contrast-label { color: rgba(255,255,255,0.80) !important; }
+.pres-contrast-desc { color: rgba(255,255,255,0.42) !important; }
+.contrast-icon { stroke: rgba(255,255,255,0.60) !important; fill: none; }
+
+/* ── Concept steps ─────────────────────────────────────── */
+.concept-step { border-color: rgba(255,255,255,0.10) !important; }
+.concept-step-num { color: rgba(255,255,255,0.22) !important; }
+.concept-step-label { color: rgba(255,255,255,0.85) !important; }
+.concept-step-desc { color: rgba(255,255,255,0.42) !important; }
+
+/* ── Bottle flow ───────────────────────────────────────── */
+.bottle-flow-step { border-color: rgba(255,255,255,0.10) !important; }
+.bottle-flow-label { color: rgba(255,255,255,0.85) !important; }
+.bottle-flow-desc { color: rgba(255,255,255,0.42) !important; }
+.bottle-flow-arrow { color: rgba(255,255,255,0.25) !important; }
+
+/* ── Repo diagram ──────────────────────────────────────── */
+.repo-node { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.12) !important; }
+.repo-node-path { color: rgba(255,255,255,0.88) !important; }
+.repo-node-desc { color: rgba(255,255,255,0.42) !important; }
+.repo-link { background: rgba(255,255,255,0.10) !important; }
+.repo-pulse { background: rgba(255,255,255,0.70) !important; }
+
+/* ── Nav icons ─────────────────────────────────────────── */
+.nav-icon-cell { border-color: rgba(255,255,255,0.08) !important; }
+.nav-icon { stroke: rgba(255,255,255,0.65) !important; fill: none !important; }
+.nav-icon-label { color: rgba(255,255,255,0.82) !important; }
+.nav-icon-desc { color: rgba(255,255,255,0.38) !important; }
+
+/* ── Image captions ────────────────────────────────────── */
+figcaption { color: rgba(255,255,255,0.35) !important; }
+
+/* ── Demo buttons → white pill ─────────────────────────── */
+.pres-demo-btn {
+  background: white !important;
+  color: rgba(0,0,0,0.78) !important;
+  border: none !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em !important;
+  text-transform: none !important;
+  padding: 14px 30px !important;
+  text-decoration: none !important;
+}
+.pres-demo-btn:hover { background: rgba(255,255,255,0.90) !important; }
+.pres-demo-btn-alt {
+  background: rgba(255,255,255,0.14) !important;
+  color: rgba(255,255,255,0.88) !important;
+}
+.pres-demo-btn-alt:hover { background: rgba(255,255,255,0.24) !important; }
+
+/* ── Thanks slide ──────────────────────────────────────── */
+.pres-thanks { justify-content: center !important; }
+.pres-thanks .pres-h2 { color: rgba(255,255,255,0.70) !important; font-size: clamp(1.5rem, 4vw, 2.5rem) !important; }
+
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .pres-nav-links { display: none !important; }
+  .pres-2col { flex-direction: column !important; gap: 28px !important; }
+  .pres-2col-text, .pres-2col-visual { max-width: 100% !important; }
+  .pres-h2 { font-size: clamp(1.6rem, 6vw, 2.8rem) !important; }
+  .pres-hero-title { font-size: clamp(4rem, 18vw, 7rem) !important; }
+  .pres-concept-layout { flex-direction: column !important; }
+  .pres-repo-diagram { flex-direction: column !important; }
+  .pres-demo-links { flex-direction: column !important; align-items: stretch !important; }
+  .pres-demo-btn { text-align: center !important; }
+  .pres-tags { gap: 8px !important; }
+  .pres-slide { min-height: auto !important; scroll-snap-align: none !important; }
+  .pres-deck { scroll-snap-type: none !important; }
+  .pres-dots { display: none !important; }
 }

@@ -7,32 +7,42 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <script>
       (function () {
-        var saved = localStorage.getItem("memo-theme");
-        var theme = saved || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-        document.documentElement.dataset.theme = theme;
-
-        var palette = [[31,46,110], [0,122,61], [242,169,0], [212,42,28], [15,76,129], [255,111,97], [95,75,139], [136,176,75], [187,38,73], [255,159,124], [102,103,171], [149,82,81], [0,128,128], [212,160,23], [233,30,99], [180,160,220], [204,85,0], [34,87,59]];
-        var rgb = palette[Math.floor(Math.random() * palette.length)];
-        var soft = rgb.map(function (c) { return Math.round(c + (255 - c) * 0.62); });
-        document.documentElement.style.setProperty("--accent-pick", rgb.join(","));
-        document.documentElement.style.setProperty("--accent-pick-soft", soft.join(","));
-        window.__memoAccentRgb = rgb;
-
+        var palettes = [
+          { a:'rgba(28,118,224,0.72)', b:'rgba(224,178,120,0.62)', c:'rgba(48,155,238,0.48)', d:'rgba(195,148,88,0.40)', icon:[28,118,224] },
+          { a:'rgba(88,148,108,0.68)', b:'rgba(58,108,168,0.65)', c:'rgba(138,112,58,0.52)', d:'rgba(52,128,112,0.48)', icon:[68,138,95] },
+          { a:'rgba(198,138,58,0.72)', b:'rgba(38,128,138,0.65)', c:'rgba(228,168,78,0.52)', d:'rgba(48,118,128,0.44)', icon:[198,138,58] },
+          { a:'rgba(138,98,198,0.68)', b:'rgba(208,128,158,0.62)', c:'rgba(158,118,218,0.48)', d:'rgba(188,108,138,0.40)', icon:[138,98,198] },
+          { a:'rgba(38,98,168,0.72)', b:'rgba(218,118,98,0.65)', c:'rgba(58,128,188,0.50)', d:'rgba(198,138,118,0.42)', icon:[38,98,168] },
+          { a:'rgba(108,138,68,0.68)', b:'rgba(198,162,58,0.62)', c:'rgba(78,148,92,0.50)', d:'rgba(178,138,48,0.42)', icon:[98,138,68] },
+        ];
+        var p = palettes[Math.floor(Math.random() * palettes.length)];
+        var root = document.documentElement;
+        root.style.setProperty('--orb-a', p.a);
+        root.style.setProperty('--orb-b', p.b);
+        root.style.setProperty('--orb-c', p.c);
+        root.style.setProperty('--orb-d', p.d);
+        window.__memoAccentRgb = p.icon;
+        window.__memoFluidColors = [p.a, p.b, p.c, p.d];
         var iconLink = document.querySelector('link[rel="icon"]');
         if (iconLink) {
           var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-            + '<circle cx="16" cy="16" r="15" fill="rgb(' + rgb.join(",") + ')"/>'
-            + '<circle cx="16" cy="16" r="5" fill="#06080c"/></svg>';
-          iconLink.href = "data:image/svg+xml," + encodeURIComponent(svg);
+            + '<circle cx="16" cy="16" r="15" fill="rgb(' + p.icon.join(',') + ')"/>'
+            + '<circle cx="16" cy="16" r="5" fill="#ede8de"/></svg>';
+          iconLink.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
         }
       })();
     </script>
   </head>
   <body class="upload-body">
-    <label class="theme-switch" aria-label="Toggle light/dark mode">
-      <input type="checkbox" id="theme-switch-input" />
-      <span class="theme-switch-track"><span class="theme-switch-knob"></span></span>
-    </label>
+    <div id="fluid-bg">
+      <div class="orb orb-a"></div>
+      <div class="orb orb-b"></div>
+      <div class="orb orb-c"></div>
+      <div class="orb orb-d"></div>
+      <div class="orb orb-e"></div>
+      <div class="orb orb-f"></div>
+    </div>
+    <canvas id="particle-canvas"></canvas>
     <button class="page-back" id="page-back" type="button" aria-label="Back">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M19 12H5M5 12L11 6M5 12L11 18" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
@@ -57,7 +67,7 @@
         </svg>
         <p class="caption-tagline">Browse The Archive</p>
         <p>Pick a memory below and it will appear on the viewer right now.</p>
-        <p class="terminal-line">LOADING MEMORIES <span class="blink-cursor">█</span></p>
+        <p class="caption-gentle">pick a memory to send it to the viewer</p>
       </header>
 
       <section id="individual-section">
@@ -85,6 +95,57 @@
       <span class="cursor-dot"></span>
     </div>
 
+    <script>
+      (function () {
+        var canvas = document.getElementById("particle-canvas");
+        if (!canvas) return;
+        var ctx = canvas.getContext("2d");
+        var W, H;
+        function parseRgb(s) { var m=s.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/); return m?[+m[1],+m[2],+m[3]]:[128,128,128]; }
+        var rawColors = window.__memoFluidColors || ['rgba(68,138,95,0.88)','rgba(48,98,168,0.82)','rgba(138,112,58,0.68)','rgba(52,128,112,0.62)'];
+        var COLORS = rawColors.map(parseRgb);
+        COLORS.push(COLORS[0]); COLORS.push(COLORS[1]);
+        var orbEls = ['.orb-a','.orb-b','.orb-c','.orb-d','.orb-e','.orb-f'].map(function(s){return document.querySelector(s);});
+        function resize() { W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; }
+        function orbCenter(el) {
+          if(!el) return {x:W*0.5,y:H*0.5,spawnR:80};
+          var r=el.getBoundingClientRect();
+          return {x:Math.max(-W*.15,Math.min(W*1.15,r.left+r.width*.5)),y:Math.max(-H*.15,Math.min(H*1.15,r.top+r.height*.5)),spawnR:Math.min(r.width,r.height)*.18};
+        }
+        function P(idx) { this.init(idx); }
+        P.prototype.init = function(idx) {
+          this.orbIdx = (idx!==undefined)?idx:(Math.random()<0.15?(4+Math.floor(Math.random()*2)):Math.floor(Math.random()*4));
+          var c=orbCenter(orbEls[this.orbIdx]);
+          var angle=Math.random()*Math.PI*2, ring=(c.spawnR||60)*(0.8+Math.random()*0.6);
+          this.x=c.x+Math.cos(angle)*ring; this.y=c.y+Math.sin(angle)*ring;
+          var sp=0.028+Math.random()*0.042;
+          this.vx=Math.cos(angle)*sp+(Math.random()-.5)*.02; this.vy=Math.sin(angle)*sp+(Math.random()-.5)*.02;
+          this.color=COLORS[this.orbIdx]||COLORS[0];
+          this.r=Math.random()*0.9+0.2; this.ba=Math.random()*0.38+0.08;
+          this.ph=Math.random()*Math.PI*2; this.phv=0.00015+Math.random()*0.00025;
+          this.life=0; this.max=480+Math.random()*620;
+        };
+        P.prototype.update = function(t) {
+          this.x+=this.vx+Math.sin(t*this.phv+this.ph)*0.06;
+          this.y+=this.vy+Math.cos(t*this.phv*.8+this.ph)*0.06;
+          this.life++;
+          if(this.life>this.max||this.x<-50||this.x>W+50||this.y<-50||this.y>H+50) this.init();
+        };
+        P.prototype.draw = function() {
+          var fi=Math.min(this.life/60,1),fo=Math.min((this.max-this.life)/60,1),a=this.ba*fi*fo;
+          if(a<0.008) return;
+          var c=this.color;
+          ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+          ctx.fillStyle='rgba('+c[0]+','+c[1]+','+c[2]+','+a+')'; ctx.fill();
+        };
+        resize();
+        var N=Math.min(120,Math.floor(W*H/9000));
+        var particles=Array.from({length:N},function(_,i){return new P(i%6);});
+        var t=0;
+        function animate(){ctx.clearRect(0,0,W,H);t++;particles.forEach(function(p){p.update(t);p.draw();});requestAnimationFrame(animate);}
+        window.addEventListener('resize',resize); animate();
+      })();
+    </script>
     <script type="module" src="/src/memories.js"></script>
   </body>
 </html>

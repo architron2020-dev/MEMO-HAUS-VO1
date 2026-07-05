@@ -64,6 +64,10 @@ class SharpEngine:
         predictor.load_state_dict(state_dict)
         predictor.eval()
         predictor.to(self.device)
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
+            free = torch.cuda.mem_get_info()[0] // 1024**2
+            LOGGER.info("Model loaded — %.0f MB VRAM free", free)
         self._predictor = predictor
         LOGGER.info("SHARP predictor ready on device %s", self.device)
 
@@ -76,38 +80,62 @@ class SharpEngine:
         if self._predictor is None:
             raise RuntimeError("SharpEngine.load() must be called before inference.")
 
+        import gc
         import torch
-        from sharp.cli.predict import predict_image
+        from sharp.cli.predict import predict_image as _predict_image
         from sharp.utils import io
         from sharp.utils.gaussians import save_ply
 
         image, _, f_px = io.load_rgb(image_path)
         height, width = image.shape[:2]
-        LOGGER.info("Input image: %dx%d", width, height)
-
-        # SHARP's model requires 1536×1536 internally — changing this breaks
-        # the DPT decoder's skip-connection sizes. We halve VRAM a different
-        # way: float16 autocast cuts intermediate activation memory in half,
-        # and flash-attention (PyTorch ≥2.0) makes attention O(n) not O(n²).
-        use_amp = self.device == "cuda"
+        LOGGER.info("Input image: %dx%d  f_px=%s", width, height, f_px)
 
         with self._lock:
+            # Decide whether to run on CUDA or go straight to CPU.
+            # SHARP needs ~1 GB of activation headroom; if less is free, skip
+            # the CUDA attempt entirely to avoid an OOM crash-and-retry cycle.
+            infer_device = self.device
             if self.device == "cuda":
+                gc.collect()
                 torch.cuda.empty_cache()
-            try:
-                with torch.amp.autocast(device_type="cuda", enabled=use_amp):
-                    gaussians = predict_image(
-                        self._predictor, image, f_px, torch.device(self.device)
+                free_mb = torch.cuda.mem_get_info()[0] // 1024**2
+                LOGGER.info("Pre-inference VRAM free: %d MB", free_mb)
+                if free_mb < 1024:
+                    LOGGER.warning(
+                        "Only %d MB VRAM free — running inference on CPU to avoid OOM", free_mb
                     )
+                    infer_device = "cpu"
+
+            def _run_on(dev: str):
+                if dev == "cpu":
+                    self._predictor.float().cpu()
+                with torch.inference_mode():
+                    with torch.amp.autocast(device_type="cuda", enabled=(dev == "cuda")):
+                        return _predict_image(
+                            self._predictor, image, f_px, torch.device(dev)
+                        )
+
+            try:
+                gaussians = _run_on(infer_device)
             except RuntimeError as exc:
-                if "out of memory" in str(exc).lower() and self.device == "cuda":
+                _msg = str(exc).lower()
+                _cuda_fail = infer_device == "cuda" and (
+                    "out of memory" in _msg or "cuda error" in _msg or "low precision" in _msg
+                )
+                if _cuda_fail:
+                    LOGGER.warning("CUDA failed (%s) — retrying on CPU (2-4 min)…", exc)
+                    gc.collect()
                     torch.cuda.empty_cache()
-                    raise RuntimeError(
-                        "GPU out of memory. Please restart the server and try again."
-                    ) from exc
-                raise
+                    gaussians = _run_on("cpu")
+                else:
+                    raise
             finally:
-                if self.device == "cuda":
+                # Always restore model to CUDA after inference
+                if self.device == "cuda" and next(self._predictor.parameters()).device.type == "cpu":
+                    self._predictor.to(self.device)
+                    torch.cuda.empty_cache()
+                elif self.device == "cuda":
+                    gc.collect()
                     torch.cuda.empty_cache()
 
         output_ply.parent.mkdir(parents=True, exist_ok=True)

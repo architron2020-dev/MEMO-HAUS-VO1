@@ -221,10 +221,10 @@ async function restoreDraft() {
     selectedFiles = restored;
     renderSelection();
     if (hadText || restored.length) {
-      setStatus("Draft restored — re-add your audio clip then tap Initiate Reconstruction.", "pending");
+      setStatus("Draft restored — re-add your audio clip to continue.", "pending");
     }
   } else if (hadText) {
-    setStatus("Draft restored — re-select your photo and audio to continue.", "pending");
+    setStatus("Draft restored — re-select your photo to continue.", "pending");
   }
 }
 
@@ -898,7 +898,7 @@ form.addEventListener("submit", async (event) => {
 
 function setBusy(busy) {
   uploadButton.disabled = busy || selectedFiles.length === 0;
-  uploadButton.textContent = busy ? "Generating…" : "Initiate Reconstruction";
+  uploadButton.textContent = busy ? "building…" : "preserve →";
   generatingOverlay.classList.toggle("hidden", !busy);
   if (busy) {
     startGenPhrases();
@@ -926,3 +926,383 @@ function resetForm() {
   charCounter.textContent = "0 / 280";
   charCounter.classList.remove("near-limit");
 }
+
+// ═══════════════════════════════════════════════════════
+// SPA — Tab switching, Navigate controls, Memoverse
+// ═══════════════════════════════════════════════════════
+
+// ── Tab switching ─────────────────────────────────────
+
+let _activeTab = "preserve";
+const tabBtns   = document.querySelectorAll(".tab-btn");
+const tabPanels = document.querySelectorAll(".tab-panel");
+
+const verseLaunchBtn      = document.getElementById("verse-launch");
+const preserveActionBtn   = document.getElementById("preserve-action-btn");
+
+// Proxy: visible action button → hidden submit button inside the form
+if (preserveActionBtn && uploadButton) {
+  new MutationObserver(() => {
+    preserveActionBtn.disabled = uploadButton.disabled;
+    preserveActionBtn.textContent = uploadButton.textContent.includes("building") ? "building…" : "preserve";
+  }).observe(uploadButton, { attributes: true, attributeFilter: ["disabled"], childList: true, subtree: true, characterData: true });
+  preserveActionBtn.addEventListener("click", () => { if (!uploadButton.disabled) uploadButton.click(); });
+}
+
+function switchTab(target) {
+  if (target === _activeTab) return;
+  _activeTab = target;
+  tabBtns.forEach(b  => b.classList.toggle("active",  b.dataset.tab === target));
+  tabPanels.forEach(p => p.classList.toggle("active", p.id === `tab-${target}`));
+  updateBottomBar();
+  if (target === "memoverse") loadVerse();
+}
+
+tabBtns.forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
+
+// ── Bottom bar coordination ───────────────────────────
+
+function updateBottomBar() {
+  const isPreserve  = _activeTab === "preserve";
+  const isMemoverse = _activeTab === "memoverse";
+
+  if (preserveActionBtn) preserveActionBtn.style.display = isPreserve  ? "" : "none";
+  if (verseLaunchBtn)    verseLaunchBtn.style.display    = (isMemoverse && _verseSelection.size > 0) ? "" : "none";
+}
+
+// ── Memoverse ─────────────────────────────────────────
+
+const verseListEl  = document.getElementById("verse-list");
+const verseHintEl  = document.getElementById("verse-hint");
+const verseBarEl   = document.getElementById("verse-bar");
+const verseCountEl = document.getElementById("verse-count");
+const verseClearEl = document.getElementById("verse-clear");
+
+const _verseSelection = new Map(); // id → { scene, itemEl }
+let _verseLoaded = false;
+
+function _esc(str) {
+  const d = document.createElement("div");
+  d.textContent = str ?? "";
+  return d.innerHTML;
+}
+
+function buildVerseItem(scene) {
+  const el = document.createElement("div");
+  el.className = "verse-item";
+  el.dataset.id = scene.id;
+  el.innerHTML = `
+    <div class="verse-item-body">
+      <span class="verse-item-name">${_esc(scene.name)}</span>
+      <span class="verse-item-meta">${_esc(scene.author)}${scene.year ? " · " + _esc(scene.year) : ""}</span>
+    </div>
+    <div class="verse-item-actions">
+      <button type="button" class="verse-show-btn" title="Show on viewer">→</button>
+      <div class="verse-check">
+        <svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke="rgba(0,0,0,0.65)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>`;
+
+  el.addEventListener("click", (e) => {
+    if (e.target.closest(".verse-show-btn")) return;
+    toggleVerseItem(scene, el);
+  });
+
+  el.querySelector(".verse-show-btn").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    try {
+      await fetch("/api/select-scene", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scene_id: scene.id }),
+      });
+    } catch {}
+  });
+
+  return el;
+}
+
+function toggleVerseItem(scene, el) {
+  if (_verseSelection.has(scene.id)) {
+    _verseSelection.delete(scene.id);
+    el.classList.remove("verse-selected");
+  } else {
+    _verseSelection.set(scene.id, { scene, itemEl: el });
+    el.classList.add("verse-selected");
+  }
+  syncVerseBar();
+  updateBottomBar();
+}
+
+function syncVerseBar() {
+  const n = _verseSelection.size;
+  verseBarEl.classList.toggle("hidden", n === 0);
+  if (verseCountEl) verseCountEl.textContent = `${n} selected`;
+}
+
+verseClearEl?.addEventListener("click", () => {
+  for (const { itemEl } of _verseSelection.values()) itemEl.classList.remove("verse-selected");
+  _verseSelection.clear();
+  syncVerseBar();
+  updateBottomBar();
+});
+
+verseLaunchBtn?.addEventListener("click", async () => {
+  const ids = Array.from(_verseSelection.keys());
+  if (!ids.length) return;
+  verseLaunchBtn.disabled = true;
+  verseLaunchBtn.textContent = "sending…";
+  try {
+    const r = await fetch("/api/world-selection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scene_ids: ids }),
+    });
+    if (!r.ok) throw new Error(r.status);
+    verseLaunchBtn.textContent = "sent ✓";
+    setTimeout(() => { verseLaunchBtn.textContent = "enter memoverse →"; verseLaunchBtn.disabled = false; }, 2000);
+  } catch {
+    verseLaunchBtn.textContent = "failed — try again";
+    setTimeout(() => { verseLaunchBtn.textContent = "enter memoverse →"; verseLaunchBtn.disabled = false; }, 2000);
+  }
+});
+
+async function loadVerse() {
+  if (_verseLoaded) return;
+  if (verseHintEl) verseHintEl.textContent = "loading…";
+  try {
+    const r = await fetch("/api/scenes", { cache: "no-store" });
+    const scenes = await r.json();
+    scenes.sort((a, b) => b.created_at - a.created_at);
+    if (verseListEl) verseListEl.innerHTML = "";
+    if (!scenes.length) {
+      if (verseHintEl) verseHintEl.textContent = "no memories yet — preserve one first";
+      return;
+    }
+    if (verseHintEl) verseHintEl.textContent = `${scenes.length} memor${scenes.length === 1 ? "y" : "ies"} — tap to select`;
+    for (const s of scenes) verseListEl?.appendChild(buildVerseItem(s));
+    _verseLoaded = true;
+  } catch {
+    if (verseHintEl) verseHintEl.textContent = "could not load memories";
+  }
+}
+
+// ── Navigate — joystick + altitude + gyroscope ────────
+
+function haptic(pattern) {
+  // Android minimum effective vibration is ~20ms; shorter durations are ignored
+  if (!navigator.vibrate) return;
+  if (typeof pattern === "number") pattern = Math.max(20, pattern);
+  navigator.vibrate(pattern);
+}
+
+let _navState = { move_x: 0, move_z: 0, move_y: 0, turn_x: 0, turn_y: 0, gyro: false, gyro_yaw: null, gyro_pitch: null, ts: 0 };
+let _navLoopTimer = null;
+let _gyroActive = false;
+let _gyroRef    = { alpha: 0, beta: 0 };
+let _gyroListening = false;
+
+function _sendNav() {
+  _navState.ts = Date.now();
+  fetch("/api/navigate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(_navState),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+function _startNavLoop() {
+  if (_navLoopTimer) return;
+  _navLoopTimer = setInterval(_sendNav, 50);
+}
+
+function _stopNavLoop() {
+  clearInterval(_navLoopTimer);
+  _navLoopTimer = null;
+  _navState.move_x = 0; _navState.move_z = 0; _navState.move_y = 0;
+  _navState.turn_x = 0; _navState.turn_y = 0;
+  if (!_gyroActive) { _navState.gyro = false; _navState.gyro_yaw = null; _navState.gyro_pitch = null; }
+  _sendNav();
+}
+
+function _checkStopNav() {
+  if (!_navState.move_x && !_navState.move_z && !_navState.move_y &&
+      !_navState.turn_x && !_navState.turn_y && !_gyroActive) {
+    _stopNavLoop();
+  }
+}
+
+function initJoystick(stickEl, knobEl, onUpdate) {
+  let _active    = false;
+  let _pid       = null;
+  let _wasAtMax  = false;
+
+  function getPos(e) {
+    const rect = stickEl.getBoundingClientRect();
+    const ox = e.clientX - (rect.left + rect.width  / 2);
+    const oy = e.clientY - (rect.top  + rect.height / 2);
+    const maxR = rect.width * 0.38;
+    const dist = Math.hypot(ox, oy);
+    const atMax = dist > maxR;
+    const scale = atMax ? maxR / dist : 1;
+    return { dx: ox * scale, dy: oy * scale,
+             nx: (ox * scale) / maxR, ny: (oy * scale) / maxR, atMax };
+  }
+
+  stickEl.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    stickEl.setPointerCapture(e.pointerId);
+    _active = true; _pid = e.pointerId; _wasAtMax = false;
+    haptic(20);
+    const { dx, dy, nx, ny } = getPos(e);
+    knobEl.style.transition = "none";
+    knobEl.style.transform  = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    onUpdate(nx, ny);
+    _startNavLoop();
+  }, { passive: false });
+
+  stickEl.addEventListener("pointermove", (e) => {
+    if (!_active || e.pointerId !== _pid) return;
+    const { dx, dy, nx, ny, atMax } = getPos(e);
+    if (atMax && !_wasAtMax) haptic(20);
+    _wasAtMax = atMax;
+    knobEl.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    onUpdate(nx, ny);
+  });
+
+  function onEnd(e) {
+    if (!_active || e.pointerId !== _pid) return;
+    _active = false; _pid = null; _wasAtMax = false;
+    knobEl.style.transition = "transform 0.22s ease";
+    knobEl.style.transform  = "translate(-50%, -50%)";
+    onUpdate(0, 0);
+    _checkStopNav();
+  }
+  stickEl.addEventListener("pointerup",     onEnd);
+  stickEl.addEventListener("pointercancel", onEnd);
+}
+
+function initAltSlider(trackEl, thumbEl) {
+  let _active = false;
+
+  function altFrom(cy) {
+    const rect = trackEl.getBoundingClientRect();
+    return Math.max(-1, Math.min(1, 1 - ((cy - rect.top) / rect.height) * 2));
+  }
+  function setThumb(alt) {
+    thumbEl.style.top = `${(1 - (alt + 1) / 2) * 100}%`;
+  }
+
+  trackEl.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    _active = true;
+    trackEl.classList.add("active");
+    haptic(20);
+    const alt = altFrom(e.touches[0].clientY);
+    setThumb(alt);
+    thumbEl.style.transition = "none";
+    _navState.move_y = alt;
+    _startNavLoop();
+  }, { passive: false });
+
+  trackEl.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    if (!_active) return;
+    const alt = altFrom(e.touches[0].clientY);
+    setThumb(alt);
+    _navState.move_y = alt;
+  }, { passive: false });
+
+  function onEnd() {
+    if (!_active) return;
+    _active = false;
+    trackEl.classList.remove("active");
+    haptic(20);
+    _navState.move_y = 0;
+    thumbEl.style.transition = "top 0.20s ease";
+    setThumb(0);
+    _checkStopNav();
+  }
+  trackEl.addEventListener("touchend",    onEnd, { passive: true });
+  trackEl.addEventListener("touchcancel", onEnd, { passive: true });
+}
+
+function _onDeviceOrientation(e) {
+  if (!_gyroActive || e.alpha === null) return;
+  let da = e.alpha - _gyroRef.alpha;
+  if (da >  180) da -= 360;
+  if (da < -180) da += 360;
+  const db = e.beta - _gyroRef.beta;
+  _navState.gyro       = true;
+  _navState.gyro_yaw   = -(da * Math.PI / 180);
+  _navState.gyro_pitch = Math.max(-1.30, Math.min(1.30, db * Math.PI / 180 * 0.5));
+}
+
+async function toggleGyro(btnEl) {
+  const navStatusEl = document.getElementById("nav-status");
+  if (_gyroActive) {
+    _gyroActive = false;
+    haptic(25);
+    btnEl.classList.remove("active");
+    _navState.gyro = false; _navState.gyro_yaw = null; _navState.gyro_pitch = null;
+    if (navStatusEl) navStatusEl.textContent = "touch joysticks to navigate the viewer";
+    _checkStopNav();
+    return;
+  }
+
+  if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+    try {
+      const perm = await DeviceOrientationEvent.requestPermission();
+      if (perm !== "granted") {
+        haptic([30, 80, 30]);
+        if (navStatusEl) navStatusEl.textContent = "gyroscope permission denied";
+        return;
+      }
+    } catch {
+      if (navStatusEl) navStatusEl.textContent = "could not access gyroscope";
+      return;
+    }
+  }
+
+  if (!_gyroListening) {
+    window.addEventListener("deviceorientation", _onDeviceOrientation);
+    _gyroListening = true;
+  }
+  window.addEventListener("deviceorientation", (e) => {
+    if (e.alpha !== null) { _gyroRef.alpha = e.alpha; _gyroRef.beta = e.beta; }
+  }, { once: true });
+
+  _gyroActive = true;
+  haptic([25, 60, 20]);
+  btnEl.classList.add("active");
+  if (navStatusEl) navStatusEl.textContent = "gyro active — move phone to look around";
+  _startNavLoop();
+}
+
+// Wire navigate controls once DOM is ready
+(function initNavigateTab() {
+  const moveStickEl  = document.getElementById("move-stick");
+  const moveKnobEl   = document.getElementById("move-knob");
+  const lookStickEl  = document.getElementById("look-stick");
+  const lookKnobEl   = document.getElementById("look-knob");
+  const altTrackEl   = document.getElementById("alt-track");
+  const altThumbEl   = document.getElementById("alt-thumb");
+  const gyroBtnEl    = document.getElementById("gyro-btn");
+  const navResetBtnEl = document.getElementById("nav-reset-btn");
+
+  if (moveStickEl) initJoystick(moveStickEl, moveKnobEl, (nx, ny) => { _navState.move_x = nx; _navState.move_z = -ny; });
+  if (lookStickEl) initJoystick(lookStickEl, lookKnobEl, (nx, ny) => { _navState.turn_x = nx; _navState.turn_y = ny; });
+  if (altTrackEl)  initAltSlider(altTrackEl, altThumbEl);
+  if (gyroBtnEl)   gyroBtnEl.addEventListener("click", () => toggleGyro(gyroBtnEl));
+
+  if (navResetBtnEl) {
+    navResetBtnEl.addEventListener("click", () => {
+      haptic([20, 40, 20]);
+      fetch("/api/reset-view", { method: "POST" }).catch(() => {});
+    });
+  }
+})();
+
+// Set initial bottom bar state
+updateBottomBar();

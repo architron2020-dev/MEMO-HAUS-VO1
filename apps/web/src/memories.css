@@ -1,5 +1,8 @@
 @import "./upload.css";
 
+/* memories page overrides — tighter full-screen column */
+html { background: #0b0f15; }
+
 .individual-heading {
   font-size: 0.72rem;
   font-weight: 800;
