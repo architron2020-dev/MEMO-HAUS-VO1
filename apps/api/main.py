@@ -8,8 +8,11 @@ Run via:  uvicorn main:app   (with the ml-sharp venv active)
 
 from __future__ import annotations
 
+import json
 import logging
+import math
 import os
+import random
 import threading
 import time
 from pathlib import Path
@@ -17,10 +20,11 @@ from pathlib import Path
 import requests
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import proxy as proxy_mod
 from sharp_engine import SharpEngine
 from storage import Scene, Storage, now
 
@@ -60,7 +64,65 @@ _world_selected_at: float = 0.0
 _nav_lock = threading.Lock()
 _nav_state: dict = {"move_x":0,"move_z":0,"move_y":0,"turn_x":0,"turn_y":0,"gyro":False,"gyro_yaw":None,"gyro_pitch":None,"ts":0}
 _reset_ts: float = 0.0
-_scene_positions: dict = {}  # scene_id → {x_pct, y_pct}
+
+# Where each memory sits on the shared ground-plane map, as fractions of the
+# unit square (0..1). This is the single source of truth for placement: the
+# main-page map edits it, and the 3D viewer maps it onto the ground plane so
+# the two always agree. Persisted to disk so a memory's spot survives restarts.
+_POS_MIN_DIST = 0.12          # keep auto-placed memories at least this far apart
+_positions_lock = threading.Lock()
+_positions_path = STORAGE_DIR / "scene_positions.json"
+
+
+def _load_positions() -> dict:
+    try:
+        return json.loads(_positions_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_positions() -> None:
+    try:
+        _positions_path.write_text(json.dumps(_scene_positions), encoding="utf-8")
+    except Exception:  # pragma: no cover
+        LOGGER.exception("Failed persisting scene positions")
+
+
+_scene_positions: dict = _load_positions()  # scene_id → {x_pct, y_pct}
+
+
+def _assign_free_position(scene_id: str) -> dict:
+    """Give a memory the first free spot on the map that doesn't collide with an
+    existing one — a golden-angle spiral outward from the centre, so new
+    memories fan out evenly and never land on top of another."""
+    with _positions_lock:
+        if scene_id in _scene_positions:
+            return _scene_positions[scene_id]
+        existing = list(_scene_positions.values())
+
+        def free(x: float, y: float) -> bool:
+            return all((x - p["x_pct"]) ** 2 + (y - p["y_pct"]) ** 2 >= _POS_MIN_DIST ** 2
+                       for p in existing)
+
+        ga = math.pi * (3 - math.sqrt(5))
+        chosen = None
+        for i in range(600):
+            r = 0.06 + 0.03 * math.sqrt(i)
+            x = min(0.96, max(0.04, 0.5 + r * math.cos(i * ga)))
+            y = min(0.96, max(0.04, 0.5 + r * math.sin(i * ga)))
+            if free(x, y):
+                chosen = {"x_pct": x, "y_pct": y}
+                break
+        if chosen is None:
+            chosen = {"x_pct": random.random(), "y_pct": random.random()}
+        _scene_positions[scene_id] = chosen
+        _save_positions()
+        return chosen
+
+
+# Latest 3D viewer camera pose, so the map can draw where the viewer is looking.
+_camera_lock = threading.Lock()
+_camera_state: dict = {"x": 0.0, "z": 0.0, "yaw": 0.0, "ts": 0.0}
 
 
 class SelectScenePayload(BaseModel):
@@ -75,6 +137,12 @@ class ScenePositionPayload(BaseModel):
     scene_id: str
     x_pct: float
     y_pct: float
+
+
+class CameraStatePayload(BaseModel):
+    x: float = 0.0
+    z: float = 0.0
+    yaw: float = 0.0
 
 
 class NavPayload(BaseModel):
@@ -119,11 +187,32 @@ def _warmup() -> None:
         LOGGER.exception("Failed to load SHARP model during warmup")
 
 
+def _warm_proxies() -> None:
+    """Pre-build the tiny viewer proxy blobs for every existing scene so the
+    first visitor's viewer boots instantly instead of triggering 30-odd
+    on-demand builds. Cheap (~0.05 s/scene) and cached to disk afterwards.
+    Also backfills a map position for any scene that doesn't have one yet, so
+    every memory has a spot the moment the viewer/map opens."""
+    try:
+        for scene in storage.list_scenes():
+            if scene.id not in _scene_positions:
+                _assign_free_position(scene.id)
+            ply = storage.splats_dir / scene.ply_file
+            if ply.exists():
+                try:
+                    proxy_mod.get_or_build_proxy(ply)
+                except Exception:
+                    LOGGER.exception("Failed pre-warming proxy for %s", scene.id)
+    except Exception:
+        LOGGER.exception("Proxy pre-warm pass failed")
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     LOGGER.info("Storage at %s", STORAGE_DIR)
     LOGGER.info("Warming up SHARP model in the background (device=%s)...", engine.device)
     threading.Thread(target=_warmup, name="sharp-warmup", daemon=True).start()
+    threading.Thread(target=_warm_proxies, name="proxy-warmup", daemon=True).start()
 
 
 @app.get("/api/health")
@@ -140,6 +229,48 @@ def latest() -> JSONResponse:
 @app.get("/api/scenes")
 def scenes() -> list[dict]:
     return [_serialize(s) for s in storage.list_scenes()]
+
+
+@app.get("/api/scene-proxy/{scene_id}")
+def scene_proxy(scene_id: str) -> FileResponse:
+    """Tiny pre-decimated point cloud (~180 KB) for the viewer's distant-view
+    layer, so it never has to download the full ~64 MB PLY just to draw a few
+    thousand preview points. Built once on first request and cached to disk
+    next to the PLY; see proxy.py for the blob format."""
+    ply_path = storage.splats_dir / f"{scene_id}.ply"
+    if not ply_path.exists():
+        raise HTTPException(status_code=404, detail="scene not found")
+    try:
+        out = proxy_mod.get_or_build_proxy(ply_path)
+    except Exception as exc:  # pragma: no cover - surfaced to the client
+        LOGGER.exception("Failed building proxy for %s", scene_id)
+        raise HTTPException(status_code=500, detail=f"proxy build failed: {exc}")
+    return FileResponse(
+        out,
+        media_type="application/octet-stream",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@app.get("/api/scene-splat/{scene_id}")
+def scene_splat(scene_id: str, keep: float = 0.4) -> FileResponse:
+    """Decimated full-res gaussian splat (keep ≈ fraction of the ~1.17 M
+    gaussians retained) so the viewer's on-approach point-cloud → splat swap
+    lands in ~a second instead of ~10 s. keep=1.0 serves the original PLY.
+    Built once per keep level and cached to disk; see proxy.build_decimated_ply."""
+    ply_path = storage.splats_dir / f"{scene_id}.ply"
+    if not ply_path.exists():
+        raise HTTPException(status_code=404, detail="scene not found")
+    try:
+        out = proxy_mod.get_or_build_lite_ply(ply_path, keep)
+    except Exception as exc:  # pragma: no cover - surfaced to the client
+        LOGGER.exception("Failed building lite splat for %s", scene_id)
+        raise HTTPException(status_code=500, detail=f"splat build failed: {exc}")
+    return FileResponse(
+        out,
+        media_type="application/octet-stream",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @app.post("/api/select-scene")
@@ -198,13 +329,32 @@ def get_navigate() -> dict:
 
 @app.post("/api/scene-position")
 def set_scene_position(payload: ScenePositionPayload) -> dict:
-    _scene_positions[payload.scene_id] = {"x_pct": payload.x_pct, "y_pct": payload.y_pct}
+    with _positions_lock:
+        _scene_positions[payload.scene_id] = {"x_pct": payload.x_pct, "y_pct": payload.y_pct}
+        _save_positions()
     return {"ok": True}
 
 
 @app.get("/api/scene-positions")
 def get_scene_positions() -> dict:
-    return dict(_scene_positions)
+    with _positions_lock:
+        return dict(_scene_positions)
+
+
+@app.post("/api/camera-state")
+def set_camera_state(payload: CameraStatePayload) -> dict:
+    """The 3D viewer posts its camera pose here a few times a second so the
+    main-page map can show where the viewer is and which way it's looking."""
+    global _camera_state
+    with _camera_lock:
+        _camera_state = {"x": payload.x, "z": payload.z, "yaw": payload.yaw, "ts": time.time() * 1000}
+    return {"ok": True}
+
+
+@app.get("/api/camera-state")
+def get_camera_state() -> dict:
+    with _camera_lock:
+        return dict(_camera_state)
 
 
 @app.post("/api/reset-view")
@@ -370,6 +520,9 @@ def predict(
             audio_file=audio_filename,
         )
     )
+    # Give the new memory a spot on the map that doesn't overlap any existing
+    # one, so it fans out into free space instead of landing on a neighbour.
+    _assign_free_position(scene_id)
     LOGGER.info("Scene %s ready -> %s", scene_id, scene.ply_url)
     return _serialize(scene)
 
@@ -383,6 +536,7 @@ def _serialize(scene: Scene) -> dict:
         "story": scene.story,
         "cluster_id": scene.cluster_id,
         "ply_url": scene.ply_url,
+        "splat_url": f"/api/scene-splat/{scene.id}",
         "image_url": scene.image_url,
         "audio_url": scene.audio_url,
         "created_at": scene.created_at,

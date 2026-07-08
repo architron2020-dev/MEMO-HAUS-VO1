@@ -1096,6 +1096,7 @@ async function loadExplore() {
 
     buildWordCloud(allScenes, storedPos);
     setupTimeline(allScenes);
+    startCameraIndicator();
     if (exploreHintEl) exploreHintEl.style.display = "none";
     _exploreLoaded = true;
   } catch {
@@ -1103,9 +1104,56 @@ async function loadExplore() {
   }
 }
 
+// ── Live camera indicator on the map ──────────────────────────────────────
+// The 3D viewer posts its camera pose to /api/camera-state; we mirror it here
+// as a "you are here" arrow so the map shows where the viewer is standing and
+// which way it's looking, in the SAME coordinate space as the memory words.
+const MAP_GROUND_SPAN = 640; // MUST match GROUND_SPAN in viewer.js
+let _camMarkerEl = null;
+let _camPollId = null;
+
+function _ensureCamMarker() {
+  if (_camMarkerEl && _camMarkerEl.parentNode) return _camMarkerEl;
+  if (!exploreWordsEl) return null;
+  const el = document.createElement("div");
+  el.className = "map-camera";
+  el.innerHTML = '<span class="map-camera-cone"></span><span class="map-camera-dot"></span>';
+  exploreWordsEl.appendChild(el); // inside the pan/zoom-transformed layer
+  _camMarkerEl = el;
+  return el;
+}
+
+async function _pollCameraState() {
+  try {
+    const r = await fetch("/api/camera-state", { cache: "no-store" });
+    if (!r.ok) return;
+    const { x, z, yaw, ts } = await r.json();
+    const el = _ensureCamMarker();
+    if (!el) return;
+    if (!ts) { el.style.display = "none"; return; }
+    el.style.display = "";
+    // Same mapping the viewer uses, inverted: world (x,z) → unit-square pct.
+    const xp = Math.max(-0.05, Math.min(1.05, x / MAP_GROUND_SPAN + 0.5));
+    const yp = Math.max(-0.05, Math.min(1.05, z / MAP_GROUND_SPAN + 0.5));
+    // Heading on the map: forward is (sin yaw, cos yaw) in (right, down); the
+    // arrow art points up, so rotate it by atan2(sinYaw, -cosYaw).
+    const deg = Math.atan2(Math.sin(yaw), -Math.cos(yaw)) * 180 / Math.PI;
+    el.style.left = `${xp * 100}%`;
+    el.style.top  = `${yp * 100}%`;
+    el.style.transform = `rotate(${deg}deg)`;
+  } catch {}
+}
+
+function startCameraIndicator() {
+  if (_camPollId) return;
+  _pollCameraState();
+  _camPollId = setInterval(_pollCameraState, 300);
+}
+
 function buildWordCloud(allScenes, positions) {
   if (!exploreWordsEl) return;
   exploreWordsEl.innerHTML = "";
+  _camMarkerEl = null; // wiped by innerHTML reset; re-created on next poll
   _exploreWords.clear();
 
   allScenes.forEach(scene => {

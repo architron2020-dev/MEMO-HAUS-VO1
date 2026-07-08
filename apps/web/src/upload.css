@@ -1514,6 +1514,34 @@ a.tab-btn { text-decoration: none; }
   transform: translate(-50%, -50%) scale(1.20);
 }
 .explore-word.focused .explore-word-year { color: rgba(255,255,255,0.50); }
+
+/* Live "you are here" marker mirroring the 3D viewer's camera. Lives inside
+   #explore-words so it pans/zooms with the memory words and shares their
+   coordinate space. Zero-size box: children are placed relative to its origin
+   (the exact map point), and rotate() spins the view cone around that point. */
+.map-camera {
+  position: absolute;
+  width: 0; height: 0;
+  pointer-events: none;
+  z-index: 2;
+  transition: left 0.18s linear, top 0.18s linear, transform 0.18s linear;
+}
+.map-camera-cone {
+  position: absolute;
+  left: -26px; top: -52px;
+  width: 0; height: 0;
+  border-left: 26px solid transparent;
+  border-right: 26px solid transparent;
+  border-top: 52px solid rgba(130,205,255,0.16); /* apex at origin, fans "forward" */
+}
+.map-camera-dot {
+  position: absolute;
+  left: -5px; top: -5px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: rgba(150,215,255,0.95);
+  box-shadow: 0 0 10px 3px rgba(130,205,255,0.7);
+}
 .explore-word.dragging {
   color: rgba(255,255,255,0.88);
   transform: translate(-50%, -50%) scale(1.10);

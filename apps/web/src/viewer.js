@@ -1,7 +1,6 @@
 import "./viewer.css";
 import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
-import { parseSplatPly } from "./ply-parser.js";
 
 const viewerEl      = document.getElementById("viewer");
 const placeholderEl   = document.getElementById("placeholder");
@@ -189,35 +188,23 @@ let worldLoadedOrder = []; // scene ids ordered by viewer scene index
 let worldFocusedId = null; // which scene's audio is currently active
 const serverPositions = new Map(); // scene_id → {x_pct, y_pct} from /api/scene-positions
 
-const WORLD_SPACING = 55;  // fallback gap between scene CENTERS (used only when extents unknown)
-const SCENE_GAP     = 14;  // minimum gap between scene EDGES in world units
+const WORLD_SPACING = 55;  // fallback cell size when no extents are known yet
+const SCENE_GAP     = 18;  // clear gap between scene bounding boxes, in world units
 const worldPositions = new Map(); // scene id → [x, y, z]
-// scene id → { xSpan, zSpan } — measured from PLY before placement
+// scene id → { xSpan, ySpan, zSpan } — measured from the proxy points
 const sceneExtents   = new Map();
 
-// Light PLY parse (8 k sample) → X and Z extents of the gaussian cloud.
-// Uses the 5th–95th percentile to ignore stray outlier splats.
-async function measureSplatExtent(scene) {
-  if (sceneExtents.has(scene.id)) return sceneExtents.get(scene.id);
-  try {
-    const data = await parseSplatPly(scene.ply_url, 8000);
-    if (!data || data.count < 4) return null;
-    const xs = [], zs = [];
-    for (let i = 0; i < data.count; i++) {
-      xs.push(data.positions[i * 3]);
-      zs.push(data.positions[i * 3 + 2]);
-    }
-    xs.sort((a, b) => a - b);
-    zs.sort((a, b) => a - b);
-    const lo = Math.floor(data.count * 0.05);
-    const hi = Math.ceil(data.count * 0.95) - 1;
-    const ext = {
-      xSpan: Math.max(4, xs[hi] - xs[lo]),
-      zSpan: Math.max(4, zs[hi] - zs[lo]),
-    };
-    sceneExtents.set(scene.id, ext);
-    return ext;
-  } catch { return null; }
+// ── Ground-plane placement, shared with the main-page map ─────────────────
+// A memory's spot lives on the server as (x_pct, y_pct) in a unit square — the
+// SAME numbers the main-page map edits. The viewer maps that square onto the
+// horizontal GROUND plane (Y = 0, the floor you look across), so the map and
+// the 3D world are always the same layout. GROUND_SPAN is the world size of
+// that square; it must be shared with the main page (see index.html map).
+const GROUND_SPAN = 640;   // world units across the full unit-square ground map
+const GROUND_Y    = 0;     // everything sits on the floor plane
+
+function pctToWorld(p) {
+  return [(p.x_pct - 0.5) * GROUND_SPAN, GROUND_Y, (p.y_pct - 0.5) * GROUND_SPAN];
 }
 
 async function fetchServerPositions() {
@@ -230,47 +217,99 @@ async function fetchServerPositions() {
   } catch {}
 }
 
-const WORLD_SPREAD = 44; // world units for full word-cloud extent
-
-// Places targetScenes using server positions where available, linear layout otherwise.
-function assignWorldPositionsAdaptive(targetScenes) {
-  const unpositioned = [];
-  for (const s of targetScenes) {
-    const sp = serverPositions.get(s.id);
-    if (sp) {
-      worldPositions.set(s.id, [(sp.x_pct - 0.5) * WORLD_SPREAD, 0, (sp.y_pct - 0.5) * WORLD_SPREAD]);
-    } else {
-      unpositioned.push(s);
-    }
+// Lattice step for the fallback layout: the largest scene footprint + a gap.
+function worldCell() {
+  let maxExt = 0;
+  for (const e of sceneExtents.values()) {
+    maxExt = Math.max(maxExt, e.xSpan || 0, e.zSpan || 0);
   }
-  if (unpositioned.length === 0) return;
-
-  const spans = unpositioned.map(s => {
-    const e = sceneExtents.get(s.id);
-    return e ? e.xSpan : WORLD_SPACING;
-  });
-  const totalWidth = spans.reduce((a, b) => a + b, 0) + (unpositioned.length - 1) * SCENE_GAP;
-  let cursor = -totalWidth / 2;
-  unpositioned.forEach((s, i) => {
-    const cx = cursor + spans[i] / 2;
-    worldPositions.set(s.id, [cx, 0, 0]);
-    cursor += spans[i] + SCENE_GAP;
-  });
+  if (!isFinite(maxExt) || maxExt <= 0) maxExt = WORLD_SPACING;
+  return maxExt + SCENE_GAP;
 }
 
-// Fallback for scenes not in the current world subset.
-let _fallbackCount = 0;
-function assignWorldPosition(scene) {
+// Fallback only, for a scene the server has no position for yet: claim the
+// innermost free cell on the GROUND plane (2D shells around the origin), so it
+// still doesn't overlap anything already placed.
+function placeSceneNoOverlap(scene) {
   if (worldPositions.has(scene.id)) return worldPositions.get(scene.id);
+  const cell = worldCell();
+  const occupied = [...worldPositions.values()];
+  const isFree = p => occupied.every(o =>
+    Math.hypot(p[0] - o[0], p[2] - o[2]) >= cell * 0.999);
+
+  for (let r = 0; r < 64; r++) {
+    for (let ix = -r; ix <= r; ix++)
+      for (let iz = -r; iz <= r; iz++) {
+        if (Math.max(Math.abs(ix), Math.abs(iz)) !== r) continue;
+        const p = [ix * cell, GROUND_Y, iz * cell];
+        if (isFree(p)) { worldPositions.set(scene.id, p); return p; }
+      }
+  }
+  const p = [(occupied.length + 1) * cell, GROUND_Y, 0];
+  worldPositions.set(scene.id, p);
+  return p;
+}
+
+// Resolve one scene's world spot: server position if it has one, else a
+// non-overlapping ground cell.
+function resolveWorldPosition(scene) {
   const sp = serverPositions.get(scene.id);
   if (sp) {
-    const pos = [(sp.x_pct - 0.5) * WORLD_SPREAD, 0, (sp.y_pct - 0.5) * WORLD_SPREAD];
-    worldPositions.set(scene.id, pos);
-    return pos;
+    const p = pctToWorld(sp);
+    worldPositions.set(scene.id, p);
+    return p;
   }
-  const pos = [1000 + _fallbackCount++ * WORLD_SPACING, 0, 0];
-  worldPositions.set(scene.id, pos);
-  return pos;
+  return placeSceneNoOverlap(scene);
+}
+
+// Lay out a whole set from the authoritative server positions (server-placed
+// first, so any fallbacks fill the gaps between them without overlap).
+function relayoutWorldEven(orderedScenes) {
+  for (const s of orderedScenes) worldPositions.delete(s.id);
+  const placed = orderedScenes.filter(s => serverPositions.has(s.id));
+  const rest   = orderedScenes.filter(s => !serverPositions.has(s.id));
+  for (const s of placed) resolveWorldPosition(s);
+  for (const s of rest)   placeSceneNoOverlap(s);
+}
+
+// A scene arriving later (poll) — use its server spot, or drop it into the
+// first free cell without disturbing anything already placed.
+function assignWorldPosition(scene) {
+  return resolveWorldPosition(scene);
+}
+
+// Live-move a memory to a new world position: slide its proxy and audio right
+// away, and if its full splat is loaded, drop it so it reloads at the new spot
+// when next approached (the library pins a splat's position at load time).
+function moveSceneTo(id, p) {
+  worldPositions.set(id, p);
+  const proxy = pointCloudProxies.get(id);
+  if (proxy) proxy.position.set(p[0], p[1], p[2]);
+  const src = _activeSources.get(id);
+  if (src) src.worldPos = [p[0], p[1], p[2]];
+  if (loadedSplatIds.includes(id)) {
+    if (primaryId === id) primaryId = null;
+    const rp = splatRecency.indexOf(id);
+    if (rp !== -1) splatRecency.splice(rp, 1);
+    enqueueSplatOp(`move-reload ${id}`, () => splatUnload(id));
+  }
+}
+
+// Poll the server for map edits and apply any moved memory in real time — this
+// is what makes dragging a memory on the main-page map slide it in the viewer.
+async function syncServerPositions() {
+  if (!worldMode) return;
+  try {
+    const r = await fetch("/api/scene-positions", { cache: "no-store" });
+    if (!r.ok) return;
+    const data = await r.json();
+    for (const [id, sp] of Object.entries(data)) {
+      const prev = serverPositions.get(id);
+      if (prev && prev.x_pct === sp.x_pct && prev.y_pct === sp.y_pct) continue;
+      serverPositions.set(id, sp);
+      if (worldPositions.has(id)) moveSceneTo(id, pctToWorld(sp));
+    }
+  } catch {}
 }
 
 // Runs fn(item) over items with at most `limit` in flight at once — plain
@@ -300,19 +339,68 @@ async function mapWithConcurrency(items, limit, fn) {
 // full quality only ever loads for whichever ONE scene the visitor is
 // currently near, everything else stays a lightweight point cloud.
 const POINT_CLOUD_MAX_POINTS = 12_000;
-const POINT_SIZE = 0.05;
-const PROXY_BUILD_CONCURRENCY = 3; // each proxy still downloads the full ~66MB PLY
+// World-space point size (sizeAttenuation is ON below) so points shrink with
+// distance — near memories read as a full cloud, far ones stay small dots
+// instead of a same-size screen-space mess piled over everything.
+const POINT_SIZE = 0.35;
+// Proxies are now tiny pre-decimated blobs (~180 KB) served by
+// /api/scene-proxy, not the full ~64 MB PLY — so we can fetch many at once.
+const PROXY_BUILD_CONCURRENCY = 8;
 const pointCloudProxies = new Map(); // scene id → THREE.Points
+
+// Fetches the tiny pre-decimated proxy blob (see apps/api/proxy.py) and
+// unpacks it into plain Float32 position/colour arrays. This is ~180 KB over
+// the wire instead of the full ~64 MB PLY — the single change that takes the
+// distant-view layer from ~45 s to a second or two for the whole archive.
+async function fetchProxyPoints(sceneId) {
+  const res = await fetch(`/api/scene-proxy/${encodeURIComponent(sceneId)}`);
+  if (!res.ok) throw new Error(`proxy HTTP ${res.status}`);
+  const buf = new Uint8Array(await res.arrayBuffer()).buffer;
+  const dv  = new DataView(buf);
+  const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
+  if (magic !== "MPX1") throw new Error("bad proxy magic");
+  const count = dv.getUint32(4, true);
+  const positions = new Float32Array(buf, 8, count * 3);        // 8 is 4-byte aligned
+  const colU8     = new Uint8Array(buf, 8 + count * 12, count * 3);
+  const colors    = new Float32Array(count * 3);
+  for (let i = 0; i < colors.length; i++) colors[i] = colU8[i] / 255;
+  return { positions, colors, count };
+}
+
+// Measure a scene's on-plane footprint from the proxy points (5th–95th
+// percentile, ignoring stray outliers) so the world can pack scenes edge-to-
+// edge and the overview camera can frame them tightly.
+function recordExtentFromPoints(id, data) {
+  if (sceneExtents.has(id)) return;
+  const n = data.count;
+  const xs = new Float32Array(n), ys = new Float32Array(n), zs = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    xs[i] = data.positions[i * 3];
+    ys[i] = data.positions[i * 3 + 1];
+    zs[i] = data.positions[i * 3 + 2];
+  }
+  xs.sort(); ys.sort(); zs.sort();
+  const lo = Math.floor(n * 0.05), hi = Math.max(lo, Math.ceil(n * 0.95) - 1);
+  sceneExtents.set(id, {
+    xSpan: Math.max(4, xs[hi] - xs[lo]),
+    ySpan: Math.max(4, ys[hi] - ys[lo]),
+    zSpan: Math.max(4, zs[hi] - zs[lo]),
+  });
+}
 
 async function addPointCloudProxy(scene, worldPos) {
   if (pointCloudProxies.has(scene.id) || !viewer) return;
   const t0 = performance.now();
-  const data = await parseSplatPly(scene.ply_url, POINT_CLOUD_MAX_POINTS);
+  const data = await fetchProxyPoints(scene.id);
   if (!data || data.count < 1 || !viewer) return;
+  recordExtentFromPoints(scene.id, data);
 
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(data.positions.subarray(0, data.count * 3), 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(data.colors.subarray(0, data.count * 3), 3));
+  geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(data.colors, 3));
+  // sizeAttenuation:true → POINT_SIZE is world units, so points get smaller
+  // with distance (perspective), which keeps a field of memories readable
+  // instead of a flat mess of equal-size dots.
   const material = new THREE.PointsMaterial({ size: POINT_SIZE, vertexColors: true, sizeAttenuation: true });
   const points = new THREE.Points(geometry, material);
   points.position.set(worldPos[0], worldPos[1], worldPos[2]);
@@ -340,104 +428,163 @@ function clearPointCloudProxies() {
   pointCloudProxies.clear();
 }
 
-// ── Full-resolution swap (proximity-based) ───────────────────────────────
-// Only ONE scene is ever loaded at full gaussian-splat quality at a time —
-// whichever the visitor is currently near — bounding GPU/CPU cost no matter
-// how many memories exist in total. Everything else stays a point-cloud
-// proxy until approached.
-const FULLRES_ENTER_DIST = 6;   // load full splat once this close
-const FULLRES_EXIT_DIST  = 10;  // unload once this far (hysteresis gap avoids thrashing)
-// The library rebuilds its entire splat-tree (octree) in the background
-// after EVERY addSplatScene/removeSplatScenes call, taking many seconds for
-// a scene this size — see the long comment in buildWorldMode(). Starting a
-// NEW load or unload while a previous one's background build is still
-// running is what throws "Cannot read properties of null (reading
-// 'visitLeaves')" — and it's not just about waiting after a load: an
-// unload's own rebuild can just as easily race a load's. There's no public
-// hook to know when a rebuild has actually finished, so as a mitigation we
-// enforce a flat cooldown between ANY two swap operations. Not a complete
-// fix, but it covers realistic usage (nobody darting between memories
-// faster than this).
-const FULLRES_MIN_HOLD_MS = 15_000;
+// ── Full-resolution splats: keep-one-loaded + preload-ahead ──────────────
+// Two ideas make the point-cloud → splat swap feel instant instead of a 10 s
+// freeze on arrival:
+//
+//   1. PRELOAD AHEAD. As the camera comes within FULLRES_PRELOAD_DIST of a
+//      scene, we start loading its full splat in the BACKGROUND while the
+//      scene we're currently standing in stays loaded. The expensive part
+//      (download + octree/SplatTree build) overlaps the walk over, so by the
+//      time you arrive the splat is already there — the "swap" is just a
+//      pointer flip, no wait.
+//
+//   2. KEEP ONE LOADED. We never unload down to nothing. The current scene's
+//      splat stays up until a DIFFERENT scene has fully loaded and taken over.
+//      That's what stops the splat from vanishing when you walk deeper into a
+//      large scene (its centre falls outside the old exit radius) — there's no
+//      "too far, drop it" rule anymore, only "someone else is nearer, swap".
+//
+// FULLRES_KEEP is the fraction of gaussians the server keeps in the on-demand
+// full-res splat (see /api/scene-splat). 1.0 = original ~1.17M-gaussian scene
+// (~2.6 s octree build); lower = lighter + proportionally faster to swap in,
+// at some loss of density. This is the main quality/speed dial.
+const FULLRES_KEEP        = 0.5;
+const FULLRES_ENTER_DIST  = 7;    // this scene becomes the one we're "in"
+const FULLRES_PRELOAD_DIST = 26;  // begin background-loading a scene from this far
+// How many full-res splats may stay resident at once. Rather than unloading a
+// scene the moment you leave it, we keep the N most-recently-visited loaded, so
+// stepping back to a memory you just saw is instant (no reload). Higher = more
+// instant revisits but more GPU memory. Lower it if the GPU is tight.
+const MAX_LOADED_SPLATS   = 4;
+// After each add/remove the library keeps rebuilding its splat-tree in the
+// background with no public "done" hook; kicking off the next op too soon is
+// what threw "reading 'visitLeaves'". We serialise ops through one queue AND
+// leave this settle gap between them. It never delays anything the user sees:
+// the visible takeover is a pointer flip once a scene is already loaded, and
+// both the preload and the old-scene unload are off-screen background work.
+const SPLAT_OP_SETTLE_MS  = 900;
 
-let fullResSceneId      = null; // what's ACTUALLY loaded right now (0 or 1 scenes)
-let fullResDesiredId    = null; // what SHOULD be loaded, per proximity or explicit focus
-let fullResBusy         = false; // a load/unload is actively in flight
-let fullResCooldownUntil = 0;    // performance.now() timestamp; no new swap before this
-
-// IMPORTANT: this is the ONLY place that calls loadFullRes()/unloadFullRes().
-// Earlier versions let focusWorldScene() call loadFullRes() directly, which
-// bypassed the busy/cooldown guard entirely and let two swaps run
-// concurrently — that's what was piling up multiple full-res scenes at once
-// (textures growing 4096×2048 → 4096×4096 in the console) and repeatedly
-// throwing "Cannot add/remove splat scene while another load or unload is
-// already in progress." Every caller (proximity LOD, explicit focus/click,
-// mobile selection) now just sets fullResDesiredId and calls this — it's
-// idempotent and safe to call as often as you like.
-function reconcileFullRes() {
-  if (fullResBusy || fullResDesiredId === fullResSceneId) return;
-  const now = performance.now();
-  if (now < fullResCooldownUntil) {
-    console.log(`[viewer] LOD: swap to ${fullResDesiredId} requested but on cooldown for ${(fullResCooldownUntil - now).toFixed(0)}ms more`);
-    return; // next updateLOD tick (or the next explicit focus call) will retry
-  }
-
-  const target = fullResDesiredId;
-  console.log(`[viewer] LOD: reconciling full-res ${fullResSceneId ?? "(none)"} → ${target ?? "(none)"}`);
-  fullResBusy = true;
-  const t0 = performance.now();
-  (async () => {
-    if (fullResSceneId) await unloadFullRes();
-    if (target) await loadFullRes(target);
-  })()
-    .catch(err => console.error("[viewer] LOD: reconcile failed:", err))
-    .finally(() => {
-      fullResCooldownUntil = performance.now() + FULLRES_MIN_HOLD_MS;
-      fullResBusy = false;
-      console.log(`[viewer] LOD: reconcile settled in ${(performance.now() - t0).toFixed(0)}ms, next swap allowed in ${FULLRES_MIN_HOLD_MS}ms`);
-    });
+function splatUrl(scene) {
+  // Decimated (lighter) full-res splat when the backend offers it; the raw
+  // full-quality PLY otherwise.
+  return scene.splat_url ? `${scene.splat_url}?keep=${FULLRES_KEEP}` : scene.ply_url;
 }
 
-async function loadFullRes(sceneId) {
-  if (!viewer) return;
+// Warm a scene's splat bytes into the browser cache (immutable response), so
+// the addSplatScene() that follows skips the download entirely.
+const _prefetchedPly = new Set();
+function prefetchScenePly(sceneId) {
+  if (!sceneId || _prefetchedPly.has(sceneId)) return;
+  _prefetchedPly.add(sceneId);
+  const scene = worldScenes.find(s => s.id === sceneId) || scenes.find(s => s.id === sceneId);
+  if (scene) fetch(splatUrl(scene), { cache: "force-cache" }).catch(() => {});
+}
+
+// ── Serialised splat op queue ────────────────────────────────────────────
+// EVERYTHING that adds/removes a splat scene goes through here, one at a time,
+// with a settle gap after each — the only safe way to drive the library's
+// add/remove without racing its background tree rebuild.
+let loadedSplatIds = [];          // scene ids currently loaded, in library index order
+let splatRecency   = [];          // loaded scene ids, oldest first, most-recently-used last (LRU)
+let primaryId      = null;        // the scene currently designated "we're here"
+let wantPrimaryId  = null;        // scene we want promoted to primary (LOD/focus target)
+let preloadId      = null;        // nearest non-primary scene we're preloading
+let focusRequestId = null;        // scene an explicit focus (click/auto/mobile) is flying to
+let splatBusy      = false;       // an add/remove is in flight (or settling)
+
+// Mark a scene as most-recently-used so the LRU keeps it around longest.
+function touchSplat(id) {
+  const i = splatRecency.indexOf(id);
+  if (i !== -1) splatRecency.splice(i, 1);
+  splatRecency.push(id);
+}
+
+function enqueueSplatOp(label, fn) {
+  splatBusy = true;
+  Promise.resolve()
+    .then(fn)
+    .catch(err => console.error(`[viewer] splat op '${label}' failed:`, err))
+    .then(() => new Promise(r => setTimeout(r, SPLAT_OP_SETTLE_MS)))
+    .finally(() => { splatBusy = false; });
+}
+
+async function splatLoad(sceneId) {
+  if (!viewer || loadedSplatIds.includes(sceneId)) return;
   const scene = worldScenes.find(s => s.id === sceneId) || scenes.find(s => s.id === sceneId);
   if (!scene) return;
   const t0 = performance.now();
-  console.log(`[viewer] LOD: loading full-res splat for ${sceneId}`);
-  try {
-    await withLoadRetry(() => viewer.addSplatScene(scene.ply_url, {
-      format: GaussianSplats3D.SceneFormat.Ply,
-      splatAlphaRemovalThreshold: 5,
-      showLoadingUI: false,
-      position: worldPositions.get(sceneId) || [0, 0, 0],
-    }));
-    hidePointCloudProxy(sceneId);
-    fullResSceneId = sceneId;
-    console.log(`[viewer] LOD: full-res ready for ${sceneId} in ${(performance.now() - t0).toFixed(0)}ms`);
-  } catch (err) {
-    console.error(`[viewer] LOD: failed to load full-res for ${sceneId} after ${(performance.now() - t0).toFixed(0)}ms:`, err);
-  }
+  await withLoadRetry(() => viewer.addSplatScene(splatUrl(scene), {
+    format: GaussianSplats3D.SceneFormat.Ply,
+    splatAlphaRemovalThreshold: 5,
+    showLoadingUI: false,
+    position: worldPositions.get(sceneId) || [0, 0, 0],
+  }));
+  loadedSplatIds.push(sceneId);
+  touchSplat(sceneId);
+  hidePointCloudProxy(sceneId);
+  console.log(`[viewer] splat loaded ${sceneId} in ${(performance.now() - t0).toFixed(0)}ms (${loadedSplatIds.length} loaded)`);
 }
 
-async function unloadFullRes() {
-  if (fullResSceneId === null || !viewer) return;
-  const id = fullResSceneId;
-  const t0 = performance.now();
-  console.log(`[viewer] LOD: unloading full-res splat for ${id}`);
-  try {
-    // Only ever one scene loaded at a time in this path, so it's always index 0.
-    await withLoadRetry(() => viewer.removeSplatScenes([0], false));
-    console.log(`[viewer] LOD: unloaded ${id} in ${(performance.now() - t0).toFixed(0)}ms`);
-  } catch (err) {
-    console.error(`[viewer] LOD: failed to unload full-res for ${id} after ${(performance.now() - t0).toFixed(0)}ms:`, err);
+async function splatUnload(sceneId) {
+  const idx = loadedSplatIds.indexOf(sceneId);
+  if (idx === -1 || !viewer) return;
+  await withLoadRetry(() => viewer.removeSplatScenes([idx], false));
+  loadedSplatIds.splice(idx, 1);           // mirror the library's index shift
+  const r = splatRecency.indexOf(sceneId);
+  if (r !== -1) splatRecency.splice(r, 1);
+  showPointCloudProxy(sceneId);
+  console.log(`[viewer] splat unloaded ${sceneId} (${loadedSplatIds.length} loaded)`);
+}
+
+function resetSplatState() {
+  loadedSplatIds = [];
+  splatRecency = [];
+  primaryId = wantPrimaryId = preloadId = focusRequestId = null;
+  splatBusy = false;
+  _prefetchedPly.clear();
+}
+
+// Drives the loaded set toward what we want (the primary we're aiming at plus
+// the nearest neighbour we're preloading), while keeping up to
+// MAX_LOADED_SPLATS resident as an LRU cache so recently-visited memories stay
+// instant to return to. Does ONE op per call; ticks/LOD keep calling until
+// settled. Loading the wanted primary is prioritised, and the outgoing primary
+// is kept until the new one is fully in, so there's never an empty frame.
+function reconcileSplats() {
+  if (!viewer || splatBusy) return;
+
+  // Must-haves: never evict these, always load them.
+  const pinned = new Set();
+  if (wantPrimaryId) pinned.add(wantPrimaryId);
+  if (preloadId)     pinned.add(preloadId);
+  // Keep the current primary pinned until the incoming one has actually loaded.
+  if (primaryId && wantPrimaryId && wantPrimaryId !== primaryId && !loadedSplatIds.includes(wantPrimaryId)) {
+    pinned.add(primaryId);
   }
-  showPointCloudProxy(id);
-  fullResSceneId = null;
+
+  // 1. Load the wanted primary first, then any preload, so what the visitor is
+  //    looking at resolves before we spend the budget on a neighbour.
+  const toLoad = (wantPrimaryId && !loadedSplatIds.includes(wantPrimaryId))
+    ? wantPrimaryId
+    : [...pinned].find(id => !loadedSplatIds.includes(id));
+  if (toLoad) { enqueueSplatOp(`load ${toLoad}`, () => splatLoad(toLoad)); return; }
+
+  // 2. Everything we need is loaded — the takeover is now just a pointer flip.
+  if (wantPrimaryId && primaryId !== wantPrimaryId) { primaryId = wantPrimaryId; touchSplat(primaryId); }
+
+  // 3. Evict only when over capacity, and only the least-recently-used scene
+  //    that isn't pinned — so the N most-recent memories linger, ready to snap
+  //    back the instant you return to one.
+  if (loadedSplatIds.length > MAX_LOADED_SPLATS) {
+    const victim = splatRecency.find(id => loadedSplatIds.includes(id) && !pinned.has(id));
+    if (victim) { enqueueSplatOp(`evict ${victim}`, () => splatUnload(victim)); return; }
+  }
 }
 
 // Called every few frames from updateLOD() with the camera's world position.
-// Only decides WHAT should be loaded (fullResDesiredId) — the actual
-// load/unload is centralised in reconcileFullRes() above.
+// Only decides WHAT we want (wantPrimaryId / preloadId); reconcileSplats() does
+// the actual load/unload.
 function updateFullResLOD(cx, cy, cz) {
   if (!worldMode || worldScenes.length === 0) return;
 
@@ -445,21 +592,38 @@ function updateFullResLOD(cx, cy, cz) {
   for (const s of worldScenes) {
     const pos = worldPositions.get(s.id);
     if (!pos) continue;
-    const d = Math.hypot(cx - pos[0], cy - pos[1], cz - pos[2]);
+    const ext = sceneExtents.get(s.id);
+    // Distance to the scene's edge (centre minus a rough radius) rather than
+    // its centre, so a large scene still counts as "here" while you're inside
+    // it instead of reading as far away the moment you pass its middle.
+    const radius = ext ? Math.max(ext.xSpan, ext.zSpan) * 0.5 : 0;
+    const d = Math.max(0, Math.hypot(cx - pos[0], cy - pos[1], cz - pos[2]) - radius);
     if (d < nearestDist) { nearestDist = d; nearestId = s.id; }
   }
 
-  if (nearestId && nearestDist < FULLRES_ENTER_DIST) {
-    fullResDesiredId = nearestId;
-  } else if (fullResDesiredId) {
-    const desiredPos = worldPositions.get(fullResDesiredId);
-    const distToDesired = desiredPos
-      ? Math.hypot(cx - desiredPos[0], cy - desiredPos[1], cz - desiredPos[2])
-      : Infinity;
-    if (distToDesired > FULLRES_EXIT_DIST) fullResDesiredId = null;
+  // An explicit focus (click / auto-advance / mobile pick) wins until it's
+  // actually reached — otherwise this proximity pass would keep yanking
+  // wantPrimaryId back to the scene we're flying away from. Clear it once the
+  // focused scene has become primary.
+  if (focusRequestId && focusRequestId === primaryId) focusRequestId = null;
+
+  // Preload the nearest not-yet-primary scene as we get within range (and
+  // always the focus target, so it's building while the camera flies over).
+  preloadId = (nearestId && nearestId !== primaryId && nearestDist < FULLRES_PRELOAD_DIST) ? nearestId : null;
+  if (focusRequestId && focusRequestId !== primaryId) preloadId = focusRequestId;
+  if (preloadId) prefetchScenePly(preloadId);
+
+  if (focusRequestId && focusRequestId !== primaryId) {
+    wantPrimaryId = focusRequestId;                 // hold the focus target
+  } else if (nearestId && nearestDist < FULLRES_ENTER_DIST) {
+    wantPrimaryId = nearestId;                       // promote whoever we're near
+  } else if (!primaryId) {
+    wantPrimaryId = null;                            // nothing loaded, nothing near yet
+  } else {
+    wantPrimaryId = primaryId;                       // hold current — never unload to nothing
   }
 
-  reconcileFullRes();
+  reconcileSplats();
 }
 
 // Move the camera to the canonical front view of a scene in Memory Verse.
@@ -469,11 +633,13 @@ function focusWorldScene(sceneId, worldPos) {
   flyToScene(worldPos, true);
   worldFocusedId = sceneId;
   // Explicit focus (click, mobile selection, auto-advance) always warrants
-  // full quality, regardless of the camera's exact distance once it
-  // arrives. Goes through the same reconciler as proximity-based LOD so the
-  // two never race each other (see the comment above reconcileFullRes()).
-  fullResDesiredId = sceneId;
-  reconcileFullRes();
+  // full quality. Aim the reconciler at it and start loading immediately, so
+  // the splat is already materialising while the camera flies over — same
+  // path as proximity LOD, so the two never race each other.
+  focusRequestId = sceneId;
+  wantPrimaryId = sceneId;
+  prefetchScenePly(sceneId);
+  reconcileSplats();
   // Update auto-advance index so it continues from the current scene
   const idx = worldScenes.findIndex(s => s.id === sceneId);
   if (idx !== -1) _worldAutoIndex = idx;
@@ -1017,32 +1183,42 @@ function flyToScene(targetPos, fromFront = false) {
   resetRaf = requestAnimationFrame(tick);
 }
 
-// Computes a camera position that frames the entire Memory Verse row.
-// All scenes are on the X axis at Z=0, so the camera just needs to pull
-// back along -Z far enough to fit the total width in the FOV.
+// Computes a camera position that frames the whole 3D cloud of memories: the
+// axis-aligned bounding box over every scene (centre ± half-extent), then a
+// pull-back along -Z far enough to fit its width/height, plus a margin for its
+// depth. Looks straight down +Z at the cloud's centre.
 function worldOverviewPos() {
   const activeScenes = worldScenes.length ? worldScenes : [];
-  if (activeScenes.length === 0) return { x: 0, y: 0, z: -30, yaw: 0, pitch: 0.05 };
+  if (activeScenes.length === 0) return { x: 0, y: 0, z: -30, yaw: 0, pitch: 0 };
 
-  // Compute the true outer edges of the scene row (center ± half-span for each scene).
-  let minEdge = Infinity, maxEdge = -Infinity, maxDepth = 0;
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
   for (const s of activeScenes) {
     const pos = worldPositions.get(s.id);
     if (!pos) continue;
     const ext = sceneExtents.get(s.id);
-    const halfX = ext ? ext.xSpan / 2 : WORLD_SPACING / 2;
-    const depth  = ext ? ext.zSpan     : WORLD_SPACING;
-    if (pos[0] - halfX < minEdge) minEdge = pos[0] - halfX;
-    if (pos[0] + halfX > maxEdge) maxEdge = pos[0] + halfX;
-    if (depth > maxDepth) maxDepth = depth;
+    const half = [
+      ext ? ext.xSpan / 2 : WORLD_SPACING / 2,
+      ext ? ext.ySpan / 2 : WORLD_SPACING / 2,
+      ext ? ext.zSpan / 2 : WORLD_SPACING / 2,
+    ];
+    for (let k = 0; k < 3; k++) {
+      min[k] = Math.min(min[k], pos[k] - half[k]);
+      max[k] = Math.max(max[k], pos[k] + half[k]);
+    }
   }
-  if (minEdge === Infinity) return { x: 0, y: 0, z: -30, yaw: 0, pitch: 0.05 };
+  if (min[0] === Infinity) return { x: 0, y: 0, z: -30, yaw: 0, pitch: 0 };
 
-  const cx = (minEdge + maxEdge) / 2;
-  const rowWidth = maxEdge - minEdge;
-  // Pull back enough to fit the full row width in ~75° FOV, plus scene depth margin.
-  const pullback = Math.max(rowWidth / 1.1 + maxDepth * 0.5 + SCENE_GAP, 30);
-  return { x: cx, y: 0, z: -pullback, yaw: 0, pitch: 0.05 };
+  const cx = (min[0] + max[0]) / 2;
+  const cy = (min[1] + max[1]) / 2;
+  const cz = (min[2] + max[2]) / 2;
+  const width  = max[0] - min[0];
+  const height = max[1] - min[1];
+  const depth  = max[2] - min[2];
+  // Pull back to fit the larger of width/height in the FOV (~55°, tan≈0.52),
+  // then add half the depth plus a gap so nothing near the front clips.
+  const pullback = Math.max((Math.max(width, height) / 2) / 0.5 + depth / 2 + SCENE_GAP, 30);
+  return { x: cx, y: cy, z: cz - pullback, yaw: 0, pitch: 0 };
 }
 
 // Smoothly fly to the world overview — used as the Memory Verse "reset"
@@ -1157,7 +1333,9 @@ async function buildWorldMode(sceneIds) {
 
   worldScenes = targetScenes;
   worldFocusedId = null;
-  assignWorldPositionsAdaptive(targetScenes);
+  // Rough even spread now (before extents are known) so the camera has
+  // something to frame; re-spread with real footprints once proxies load.
+  relayoutWorldEven(targetScenes);
 
   worldMode = true;
   worldLoadedOrder = []; // proxy-loaded scene ids, in no particular order
@@ -1174,10 +1352,7 @@ async function buildWorldMode(sceneIds) {
       console.error("Failed clearing world:", err);
     }
     clearPointCloudProxies();
-    fullResSceneId   = null;
-    fullResDesiredId = null;
-    fullResBusy      = false;
-    fullResCooldownUntil = 0;
+    resetSplatState();
     ensureViewer();
     stopAllAudio();
 
@@ -1226,6 +1401,25 @@ async function buildWorldMode(sceneIds) {
       if (splashCountEl) splashCountEl.textContent = `${doneCount} / ${total}`;
     });
     console.log(`[viewer] proxies ready: ${worldLoadedOrder.length}/${total} in ${(performance.now() - t0).toFixed(0)}ms`);
+
+    // Now that every proxy is loaded we know each scene's real footprint, so
+    // re-spread everything evenly with a lattice sized to the true largest
+    // scene — this is the pass that actually guarantees no overlaps. Then
+    // slide each proxy to its final home and re-frame the overview so the whole
+    // 3D cloud fits the view.
+    relayoutWorldEven(targetScenes);
+    for (const s of targetScenes) {
+      const p   = pointCloudProxies.get(s.id);
+      const pos = worldPositions.get(s.id);
+      if (p && pos) p.position.set(pos[0], pos[1], pos[2]);
+    }
+    if (viewer?.camera && DEBUG_LIMIT == null) {
+      const { x, y, z, yaw, pitch } = worldOverviewPos();
+      viewer.camera.position.set(x, y, z);
+      _yaw = yaw; _pitch = pitch;
+      applyFPSCamera();
+      console.log("[viewer] camera re-framed to overview after extents known", { x, y, z });
+    }
 
     // Audio doesn't depend on splat quality — start it for every scene now,
     // same distance-based spatial mix as before.
@@ -1364,8 +1558,9 @@ async function poll() {
     if (!fresh.length) return;
     console.log(`[viewer] poll: ${fresh.length} new scene(s):`, fresh.map(s => s.id));
     scenes.push(...fresh);
-    // Permanent world placement is assigned the moment a scene is known,
-    // regardless of which mode is active — so a memory's spot never shifts.
+    // Pull the server's map positions first so a brand-new memory lands on its
+    // authoritative (non-overlapping) spot instead of a fallback cell.
+    await fetchServerPositions();
     fresh.forEach(assignWorldPosition);
 
     if (worldMode) {
@@ -1630,6 +1825,22 @@ function updateLOD() {
   try { viewer.splatMesh.setSplatScale(Math.max(0.10, _lodCurrentScale)); } catch {}
 }
 
+// Throttled POST of the camera pose (position on the ground plane + yaw) for
+// the main-page map's "you are here" marker.
+let _lastCamPost = 0;
+function postCameraState() {
+  const cam = viewer?.camera;
+  if (!cam) return;
+  const now = performance.now();
+  if (now - _lastCamPost < 140) return;
+  _lastCamPost = now;
+  fetch("/api/camera-state", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ x: cam.position.x, z: cam.position.z, yaw: _yaw }),
+  }).catch(() => {});
+}
+
 function flyLoop() {
   requestAnimationFrame(flyLoop);
   updateLOD();
@@ -1669,6 +1880,10 @@ function flyLoop() {
   // Spatial audio runs every frame so distance-based gain updates
   // continuously — even when the camera is stationary or mid-flyTo.
   updateSpatialAudio();
+
+  // Report camera pose to the server a few times a second so the main-page map
+  // can show where the viewer is and which way it's looking.
+  postCameraState();
 
   if (!viewer || _keys.size === 0) return;
 
@@ -1725,6 +1940,7 @@ const _pollId      = setInterval(poll, POLL_INTERVAL);
 const _statusId    = setInterval(pollStatus, STATUS_INTERVAL);
 const _selectionId = setInterval(pollSelection, 2_000);  // snappier than POLL_INTERVAL — this is a direct user action
 const _worldSelectionId = setInterval(pollWorldSelection, 2_000);
+const _posSyncId   = setInterval(syncServerPositions, 600); // live map-drag → viewer moves
 
 // A dev-server hot-reload of this module without a full page reload would
 // otherwise leave the old poll/select/status intervals running alongside
@@ -1737,5 +1953,6 @@ if (import.meta.hot) {
     clearInterval(_statusId);
     clearInterval(_selectionId);
     clearInterval(_worldSelectionId);
+    clearInterval(_posSyncId);
   });
 }
