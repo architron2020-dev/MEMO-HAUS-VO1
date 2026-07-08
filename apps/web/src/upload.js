@@ -937,7 +937,6 @@ let _activeTab = "preserve";
 const tabBtns   = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
 
-const verseLaunchBtn      = document.getElementById("verse-launch");
 const preserveActionBtn   = document.getElementById("preserve-action-btn");
 
 // Proxy: visible action button → hidden submit button inside the form
@@ -955,7 +954,7 @@ function switchTab(target) {
   tabBtns.forEach(b  => b.classList.toggle("active",  b.dataset.tab === target));
   tabPanels.forEach(p => p.classList.toggle("active", p.id === `tab-${target}`));
   updateBottomBar();
-  if (target === "memoverse") loadVerse();
+  if (target === "explore") loadExplore();
 }
 
 tabBtns.forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
@@ -963,128 +962,293 @@ tabBtns.forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset
 // ── Bottom bar coordination ───────────────────────────
 
 function updateBottomBar() {
-  const isPreserve  = _activeTab === "preserve";
-  const isMemoverse = _activeTab === "memoverse";
-
-  if (preserveActionBtn) preserveActionBtn.style.display = isPreserve  ? "" : "none";
-  if (verseLaunchBtn)    verseLaunchBtn.style.display    = (isMemoverse && _verseSelection.size > 0) ? "" : "none";
+  if (preserveActionBtn) preserveActionBtn.style.display = _activeTab === "preserve" ? "" : "none";
 }
 
 // ── Memoverse ─────────────────────────────────────────
 
-const verseListEl  = document.getElementById("verse-list");
-const verseHintEl  = document.getElementById("verse-hint");
-const verseBarEl   = document.getElementById("verse-bar");
-const verseCountEl = document.getElementById("verse-count");
-const verseClearEl = document.getElementById("verse-clear");
+// ── Explore — word cloud + navigation ────────────────────
 
-const _verseSelection = new Map(); // id → { scene, itemEl }
-let _verseLoaded = false;
+const exploreCloudEl  = document.getElementById("explore-cloud");
+const exploreWordsEl  = document.getElementById("explore-words");
+const exploreHintEl   = document.getElementById("explore-hint");
+const exploreTimelineEl  = document.getElementById("explore-timeline");
+const tlSliderFromEl     = document.getElementById("tl-slider-from");
+const tlSliderToEl       = document.getElementById("tl-slider-to");
+const tlFillEl           = document.getElementById("tl-fill");
+const tlYrFromEl         = document.getElementById("tl-yr-from");
+const tlYrToEl           = document.getElementById("tl-yr-to");
 
-function _esc(str) {
-  const d = document.createElement("div");
-  d.textContent = str ?? "";
-  return d.innerHTML;
+const _exploreWords = new Map(); // scene_id → {el, pos, scene}
+let _exploreFocusedId = null;
+let _exploreLoaded = false;
+let _allExploreScenes = [];
+
+// ── Zoom / pan state ─────────────────────────────────────
+let _cZoom = 1, _cPanX = 0, _cPanY = 0;
+const _cloudPtrs = new Map(); // pointerId → {x, y}
+let _pinchDist0 = null, _pinchZoom0 = 1;
+let _panning = false, _panPt = null;
+
+function _applyCloudTransform() {
+  if (!exploreWordsEl) return;
+  exploreWordsEl.style.transform =
+    `translate(${_cPanX}px,${_cPanY}px) scale(${_cZoom})`;
 }
 
-function buildVerseItem(scene) {
-  const el = document.createElement("div");
-  el.className = "verse-item";
-  el.dataset.id = scene.id;
-  el.innerHTML = `
-    <div class="verse-item-body">
-      <span class="verse-item-name">${_esc(scene.name)}</span>
-      <span class="verse-item-meta">${_esc(scene.author)}${scene.year ? " · " + _esc(scene.year) : ""}</span>
-    </div>
-    <div class="verse-item-actions">
-      <button type="button" class="verse-show-btn" title="Show on viewer">→</button>
-      <div class="verse-check">
-        <svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke="rgba(0,0,0,0.65)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-    </div>`;
-
-  el.addEventListener("click", (e) => {
-    if (e.target.closest(".verse-show-btn")) return;
-    toggleVerseItem(scene, el);
-  });
-
-  el.querySelector(".verse-show-btn").addEventListener("click", async (e) => {
-    e.stopPropagation();
-    try {
-      await fetch("/api/select-scene", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scene_id: scene.id }),
-      });
-    } catch {}
-  });
-
-  return el;
+function _clampPan() {
+  const maxPan = 200 * _cZoom;
+  _cPanX = Math.max(-maxPan, Math.min(maxPan, _cPanX));
+  _cPanY = Math.max(-maxPan, Math.min(maxPan, _cPanY));
 }
 
-function toggleVerseItem(scene, el) {
-  if (_verseSelection.has(scene.id)) {
-    _verseSelection.delete(scene.id);
-    el.classList.remove("verse-selected");
-  } else {
-    _verseSelection.set(scene.id, { scene, itemEl: el });
-    el.classList.add("verse-selected");
+// Scroll-wheel zoom (desktop)
+exploreCloudEl?.addEventListener("wheel", e => {
+  e.preventDefault();
+  const f = e.deltaY < 0 ? 1.12 : 0.89;
+  _cZoom = Math.max(0.35, Math.min(4.5, _cZoom * f));
+  _clampPan();
+  _applyCloudTransform();
+}, { passive: false });
+
+// Cloud pointer events for pinch zoom + background pan
+exploreCloudEl?.addEventListener("pointerdown", e => {
+  if (e.target.closest(".explore-word")) return; // let words handle their own events
+  e.preventDefault();
+  exploreCloudEl.setPointerCapture(e.pointerId);
+  _cloudPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (_cloudPtrs.size === 1) {
+    _panning = true;
+    _panPt = { x: e.clientX, y: e.clientY, px: _cPanX, py: _cPanY };
   }
-  syncVerseBar();
-  updateBottomBar();
-}
+  if (_cloudPtrs.size === 2) {
+    _panning = false;
+    const pts = [..._cloudPtrs.values()];
+    _pinchDist0 = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+    _pinchZoom0 = _cZoom;
+  }
+}, { passive: false });
 
-function syncVerseBar() {
-  const n = _verseSelection.size;
-  verseBarEl.classList.toggle("hidden", n === 0);
-  if (verseCountEl) verseCountEl.textContent = `${n} selected`;
-}
-
-verseClearEl?.addEventListener("click", () => {
-  for (const { itemEl } of _verseSelection.values()) itemEl.classList.remove("verse-selected");
-  _verseSelection.clear();
-  syncVerseBar();
-  updateBottomBar();
-});
-
-verseLaunchBtn?.addEventListener("click", async () => {
-  const ids = Array.from(_verseSelection.keys());
-  if (!ids.length) return;
-  verseLaunchBtn.disabled = true;
-  verseLaunchBtn.textContent = "sending…";
-  try {
-    const r = await fetch("/api/world-selection", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scene_ids: ids }),
-    });
-    if (!r.ok) throw new Error(r.status);
-    verseLaunchBtn.textContent = "sent ✓";
-    setTimeout(() => { verseLaunchBtn.textContent = "enter memoverse →"; verseLaunchBtn.disabled = false; }, 2000);
-  } catch {
-    verseLaunchBtn.textContent = "failed — try again";
-    setTimeout(() => { verseLaunchBtn.textContent = "enter memoverse →"; verseLaunchBtn.disabled = false; }, 2000);
+exploreCloudEl?.addEventListener("pointermove", e => {
+  if (!_cloudPtrs.has(e.pointerId)) return;
+  _cloudPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (_cloudPtrs.size === 2 && _pinchDist0) {
+    const pts = [..._cloudPtrs.values()];
+    const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+    _cZoom = Math.max(0.35, Math.min(4.5, _pinchZoom0 * dist / _pinchDist0));
+    _clampPan();
+    _applyCloudTransform();
+  } else if (_panning && _panPt) {
+    _cPanX = _panPt.px + (e.clientX - _panPt.x);
+    _cPanY = _panPt.py + (e.clientY - _panPt.y);
+    _clampPan();
+    _applyCloudTransform();
   }
 });
 
-async function loadVerse() {
-  if (_verseLoaded) return;
-  if (verseHintEl) verseHintEl.textContent = "loading…";
+exploreCloudEl?.addEventListener("pointerup", e => {
+  _cloudPtrs.delete(e.pointerId);
+  _panning = false;
+  _pinchDist0 = null;
+});
+exploreCloudEl?.addEventListener("pointercancel", e => {
+  _cloudPtrs.delete(e.pointerId);
+  _panning = false;
+  _pinchDist0 = null;
+});
+
+async function loadExplore() {
+  if (_exploreLoaded) return;
+  if (exploreHintEl) exploreHintEl.textContent = "loading memories…";
   try {
-    const r = await fetch("/api/scenes", { cache: "no-store" });
-    const scenes = await r.json();
-    scenes.sort((a, b) => b.created_at - a.created_at);
-    if (verseListEl) verseListEl.innerHTML = "";
-    if (!scenes.length) {
-      if (verseHintEl) verseHintEl.textContent = "no memories yet — preserve one first";
+    const [scenesRes, posRes] = await Promise.all([
+      fetch("/api/scenes", { cache: "no-store" }),
+      fetch("/api/scene-positions", { cache: "no-store" }),
+    ]);
+    const allScenes = await scenesRes.json();
+    const storedPos = posRes.ok ? await posRes.json() : {};
+    _allExploreScenes = allScenes;
+
+    if (!allScenes.length) {
+      if (exploreHintEl) exploreHintEl.textContent = "no memories yet — preserve one first";
       return;
     }
-    if (verseHintEl) verseHintEl.textContent = `${scenes.length} memor${scenes.length === 1 ? "y" : "ies"} — tap to select`;
-    for (const s of scenes) verseListEl?.appendChild(buildVerseItem(s));
-    _verseLoaded = true;
+
+    // Golden-angle phyllotaxis default layout
+    const n = allScenes.length;
+    allScenes.forEach((scene, i) => {
+      if (!storedPos[scene.id]) {
+        const angle = i * 2.39996 * 2 * Math.PI;
+        const r = 0.10 + 0.34 * Math.sqrt((i + 1) / n);
+        storedPos[scene.id] = {
+          x_pct: Math.max(0.10, Math.min(0.90, 0.5 + r * Math.cos(angle))),
+          y_pct: Math.max(0.10, Math.min(0.90, 0.5 + r * Math.sin(angle))),
+        };
+      }
+    });
+
+    // Send all to viewer world
+    fetch("/api/world-selection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scene_ids: allScenes.map(s => s.id) }),
+    }).catch(() => {});
+
+    buildWordCloud(allScenes, storedPos);
+    setupTimeline(allScenes);
+    if (exploreHintEl) exploreHintEl.style.display = "none";
+    _exploreLoaded = true;
   } catch {
-    if (verseHintEl) verseHintEl.textContent = "could not load memories";
+    if (exploreHintEl) exploreHintEl.textContent = "could not load memories";
   }
+}
+
+function buildWordCloud(allScenes, positions) {
+  if (!exploreWordsEl) return;
+  exploreWordsEl.innerHTML = "";
+  _exploreWords.clear();
+
+  allScenes.forEach(scene => {
+    const pos = positions[scene.id] ?? { x_pct: 0.5, y_pct: 0.5 };
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "explore-word";
+    el.dataset.id = scene.id;
+
+    const name = (scene.name || "Untitled").substring(0, 22);
+    const year = scene.year ? scene.year.substring(0, 4) : "";
+    el.innerHTML = `<span class="explore-word-name">${name}</span>${year ? `<span class="explore-word-year">${year}</span>` : ""}`;
+
+    el.style.left = `${pos.x_pct * 100}%`;
+    el.style.top  = `${pos.y_pct * 100}%`;
+
+    let pressTimer = null;
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+    let origXpct = pos.x_pct, origYpct = pos.y_pct;
+
+    el.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.setPointerCapture(e.pointerId);
+      isDragging = false;
+      dragStartX = e.clientX; dragStartY = e.clientY;
+      origXpct = pos.x_pct; origYpct = pos.y_pct;
+      pressTimer = setTimeout(() => {
+        isDragging = true;
+        el.classList.add("dragging");
+        haptic(25);
+      }, 420);
+    }, { passive: false });
+
+    el.addEventListener("pointermove", e => {
+      if (!isDragging) return;
+      const rect = exploreCloudEl.getBoundingClientRect();
+      // Divide by zoom so drag distance matches visual movement
+      const dx = (e.clientX - dragStartX) / (_cZoom * rect.width);
+      const dy = (e.clientY - dragStartY) / (_cZoom * rect.height);
+      pos.x_pct = Math.max(0.04, Math.min(0.96, origXpct + dx));
+      pos.y_pct = Math.max(0.04, Math.min(0.96, origYpct + dy));
+      el.style.left = `${pos.x_pct * 100}%`;
+      el.style.top  = `${pos.y_pct * 100}%`;
+    });
+
+    el.addEventListener("pointerup", () => {
+      clearTimeout(pressTimer);
+      el.classList.remove("dragging");
+      if (isDragging) {
+        isDragging = false;
+        fetch("/api/scene-position", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scene_id: scene.id, x_pct: pos.x_pct, y_pct: pos.y_pct }),
+        }).catch(() => {});
+        haptic(20);
+      } else {
+        focusExploreScene(scene);
+      }
+    });
+
+    el.addEventListener("pointercancel", () => {
+      clearTimeout(pressTimer);
+      el.classList.remove("dragging");
+      isDragging = false;
+    });
+
+    exploreWordsEl.appendChild(el);
+    _exploreWords.set(scene.id, { el, pos, scene });
+  });
+}
+
+function setupTimeline(allScenes) {
+  const years = allScenes.map(s => parseInt(s.year)).filter(y => !isNaN(y) && y > 1900);
+  if (years.length < 2 || !exploreTimelineEl) return;
+  const minY = Math.min(...years), maxY = Math.max(...years);
+  exploreTimelineEl.style.display = "flex";
+
+  [tlSliderFromEl, tlSliderToEl].forEach(el => {
+    el.min = minY; el.max = maxY; el.step = 1;
+  });
+  tlSliderFromEl.value = minY;
+  tlSliderToEl.value   = maxY;
+  if (tlYrFromEl) tlYrFromEl.textContent = minY;
+  if (tlYrToEl)   tlYrToEl.textContent   = maxY;
+  _updateTlFill(minY, maxY, minY, maxY);
+
+  function onChange() {
+    let from = parseInt(tlSliderFromEl.value);
+    let to   = parseInt(tlSliderToEl.value);
+    // Prevent handles crossing
+    if (from > to) { from = to; tlSliderFromEl.value = from; }
+    if (to < from) { to = from; tlSliderToEl.value   = to;   }
+
+    const isAll = from === minY && to === maxY;
+    if (tlYrFromEl) tlYrFromEl.textContent = isAll ? "all" : from;
+    if (tlYrToEl)   tlYrToEl.textContent   = isAll ? ""    : to;
+    _updateTlFill(minY, maxY, from, to);
+    _applyTimelineFilter(from, to, isAll);
+  }
+
+  tlSliderFromEl?.addEventListener("input", onChange);
+  tlSliderToEl?.addEventListener("input", onChange);
+}
+
+function _updateTlFill(minY, maxY, from, to) {
+  if (!tlFillEl) return;
+  const span  = maxY - minY || 1;
+  const left  = (from - minY) / span * 100;
+  const right = (maxY - to)   / span * 100;
+  tlFillEl.style.left  = `${left}%`;
+  tlFillEl.style.right = `${right}%`;
+}
+
+function _applyTimelineFilter(from, to, isAll) {
+  const visible = [];
+  _exploreWords.forEach(({ el, scene }) => {
+    const sy   = parseInt(scene.year);
+    const show = isAll || isNaN(sy) || (sy >= from && sy <= to);
+    el.style.opacity       = show ? "" : "0.08";
+    el.style.pointerEvents = show ? "" : "none";
+    if (show) visible.push(scene.id);
+  });
+  // Sync viewer — show only in-range memories
+  fetch("/api/world-selection", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scene_ids: isAll ? _allExploreScenes.map(s => s.id) : visible }),
+  }).catch(() => {});
+}
+
+function focusExploreScene(scene) {
+  haptic(20);
+  _exploreWords.forEach(({ el }) => el.classList.remove("focused"));
+  _exploreWords.get(scene.id)?.el.classList.add("focused");
+  _exploreFocusedId = scene.id;
+  fetch("/api/select-scene", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scene_id: scene.id }),
+  }).catch(() => {});
 }
 
 // ── Navigate — joystick + altitude + gyroscope ────────

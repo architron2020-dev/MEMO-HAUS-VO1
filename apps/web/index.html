@@ -74,8 +74,7 @@
     <!-- Top tab bar -->
     <nav class="tab-bar">
       <button class="tab-btn active" data-tab="preserve">preserve</button>
-      <button class="tab-btn" data-tab="navigate">navigate</button>
-      <button class="tab-btn" data-tab="memoverse">memoverse</button>
+      <button class="tab-btn" data-tab="explore">explore</button>
       <a href="/presentation/index.html" target="_blank" rel="noopener" class="tab-btn">about</a>
     </nav>
 
@@ -124,7 +123,6 @@
           <div class="ghost-field">
             <textarea id="story-input" class="ghost-input ghost-textarea" placeholder="what do you remember…" maxlength="280" rows="2"></textarea>
             <i class="field-dot" id="dot-story"></i>
-            <span class="char-counter" id="char-counter">0 / 280</span>
           </div>
 
           <!-- Audio -->
@@ -191,39 +189,68 @@
       </div>
 
       <!-- ── NAVIGATE ──────────────────────────────────── -->
-      <div id="tab-navigate" class="tab-panel">
-        <div class="nav-panel">
+      <!-- ── EXPLORE ─────────────────────────────────── -->
+      <div id="tab-explore" class="tab-panel">
+        <div class="explore-panel">
 
-          <!-- Top row: reset (left) + gyro (right) -->
-          <div class="nav-top-row">
-            <button id="nav-reset-btn" class="nav-icon-btn" title="Reset viewer position">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                <path d="M3 3v5h5"/>
-              </svg>
-              <span class="nav-icon-label">reset</span>
-            </button>
-
-            <button id="gyro-btn" class="nav-icon-btn" title="Toggle gyroscope">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="9"/>
-                <path d="M12 4.5 L14.2 11.5 L12 10 L9.8 11.5 Z" fill="currentColor" stroke="none"/>
-                <path d="M12 19.5 L9.8 12.5 L12 14 L14.2 12.5 Z" fill="currentColor" stroke="none" opacity="0.32"/>
-                <line x1="12" y1="3" x2="12" y2="5"/>
-                <line x1="12" y1="19" x2="12" y2="21"/>
-              </svg>
-              <span class="nav-icon-label">gyro</span>
-            </button>
+          <!-- Word cloud: fluid orbs + draggable memory words -->
+          <div class="explore-cloud" id="explore-cloud">
+            <div class="explore-orbs" aria-hidden="true">
+              <div class="explore-orb explore-orb-a"></div>
+              <div class="explore-orb explore-orb-b"></div>
+              <div class="explore-orb explore-orb-c"></div>
+            </div>
+            <div class="explore-words" id="explore-words"></div>
+            <p class="explore-hint" id="explore-hint">loading memories…</p>
           </div>
 
-          <!-- Main controls: MOVE + LOOK stacked, ALT alongside -->
-          <div class="nav-main">
-            <div class="nav-sticks-col">
+          <!-- Timeline year range filter -->
+          <div class="explore-timeline" id="explore-timeline" style="display:none">
+            <span class="tl-yr" id="tl-yr-from">—</span>
+            <div class="tl-track" id="tl-track">
+              <div class="tl-fill" id="tl-fill"></div>
+              <input type="range" class="tl-slider" id="tl-slider-from" />
+              <input type="range" class="tl-slider" id="tl-slider-to" />
+            </div>
+            <span class="tl-yr tl-yr-right" id="tl-yr-to">—</span>
+          </div>
+
+          <!-- Controls: MOVE ring · ALT pill + icon btns · LOOK ring -->
+          <div class="explore-controls">
+            <div class="explore-ctl-row">
+
               <div class="stick-group">
                 <div class="stick-ring" id="move-stick">
                   <div class="stick-knob" id="move-knob"></div>
                 </div>
                 <div class="stick-label">move</div>
+              </div>
+
+              <div class="explore-mid-col">
+                <div class="explore-icon-row">
+                  <button id="nav-reset-btn" class="nav-icon-btn" title="Reset">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+                    </svg>
+                    <span class="nav-icon-label">reset</span>
+                  </button>
+                  <button id="gyro-btn" class="nav-icon-btn" title="Gyro">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="9"/>
+                      <path d="M12 4.5 L14.2 11.5 L12 10 L9.8 11.5 Z" fill="currentColor" stroke="none"/>
+                      <path d="M12 19.5 L9.8 12.5 L12 14 L14.2 12.5 Z" fill="currentColor" stroke="none" opacity="0.32"/>
+                      <line x1="12" y1="3" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21"/>
+                    </svg>
+                    <span class="nav-icon-label">gyro</span>
+                  </button>
+                </div>
+                <div class="alt-group">
+                  <div class="alt-track" id="alt-track">
+                    <div class="alt-thumb" id="alt-thumb"></div>
+                    <div class="alt-center-mark"></div>
+                  </div>
+                  <div class="stick-label">alt</div>
+                </div>
               </div>
 
               <div class="stick-group">
@@ -232,26 +259,11 @@
                 </div>
                 <div class="stick-label">look</div>
               </div>
-            </div>
 
-            <div class="alt-group">
-              <div class="alt-track" id="alt-track">
-                <div class="alt-thumb" id="alt-thumb"></div>
-                <div class="alt-center-mark"></div>
-              </div>
-              <div class="stick-label">alt</div>
             </div>
+            <p class="nav-status" id="nav-status">touch to navigate</p>
           </div>
 
-          <p class="nav-status" id="nav-status">touch to navigate the viewer</p>
-        </div>
-      </div>
-
-      <!-- ── MEMOVERSE ─────────────────────────────────── -->
-      <div id="tab-memoverse" class="tab-panel">
-        <div class="verse-panel">
-          <p class="verse-hint" id="verse-hint">loading memories…</p>
-          <div class="verse-list" id="verse-list"></div>
         </div>
       </div>
 
@@ -267,18 +279,12 @@
       <p class="gen-text"><span id="gen-text-content">building your memory</span></p>
     </div>
 
-    <!-- Verse action bar (above bottom bar, for memoverse) -->
-    <div class="verse-bar hidden" id="verse-bar">
-      <span id="verse-count">0 selected</span>
-      <button type="button" id="verse-clear" class="verse-clear-btn">clear</button>
-    </div>
+
 
     <!-- Bottom bar -->
     <div class="bottom-bar" id="bottom-bar">
       <!-- Visible preserve action (proxied to hidden #upload-button inside the form) -->
       <button id="preserve-action-btn" type="button" class="action-btn" disabled>preserve</button>
-      <!-- Memoverse launch action (hidden except in memoverse with selection) -->
-      <button id="verse-launch" type="button" class="action-btn" style="display:none">enter memoverse</button>
     </div>
 
     <script>

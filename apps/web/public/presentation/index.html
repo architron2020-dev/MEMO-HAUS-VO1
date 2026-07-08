@@ -43,7 +43,6 @@
     </div>
 
     <nav class="pres-nav">
-      <span class="pres-nav-brand">Memo-Haus</span>
       <span class="pres-nav-links">
         <a href="#problem">problem</a>
         <a href="#origin">origin</a>
@@ -578,5 +577,16 @@
     </main>
 
     <script src="script.js"></script>
+    <script>
+      document.addEventListener("keydown", function(e) {
+        if (e.key === "f" || e.key === "F") {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(function(){});
+          } else {
+            document.exitFullscreen().catch(function(){});
+          }
+        }
+      });
+    </script>
   </body>
 </html>

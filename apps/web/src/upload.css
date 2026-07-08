@@ -1019,30 +1019,31 @@ a.tab-btn { text-decoration: none; }
 
 .ghost-audio-row {
   display: flex;
-  gap: 10px;
+  gap: 20px;
   align-items: center;
   padding: 16px 0 6px;
   flex-wrap: wrap;
 }
 
 .audio-pill {
-  padding: 8px 18px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.10);
-  color: rgba(255,255,255,0.72);
+  padding: 4px 2px;
+  border-radius: 0;
+  border: none;
+  background: none;
+  color: rgba(255,255,255,0.38);
   font-family: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 0.70rem;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
+  transition: color 0.2s;
   -webkit-tap-highlight-color: transparent;
 }
 .audio-pill:hover, .audio-pill:active {
-  background: rgba(255,255,255,0.20);
-  border-color: rgba(255,255,255,0.45);
-  color: white;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.90);
 }
 
 .ghost-status {
@@ -1381,67 +1382,271 @@ a.tab-btn { text-decoration: none; }
   margin: 0;
 }
 
-/* ── Memoverse tab ────────────────────────────────────── */
+/* ── Explore tab ──────────────────────────────────────── */
 
-.verse-panel {
-  padding: 8px 28px;
-  min-height: 100%;
+/* Override the tab-panel padding so explore fills edge-to-edge
+   including the area behind the transparent tab bar */
+#tab-explore {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
 }
 
-.verse-hint {
-  font-size: 0.68rem;
-  letter-spacing: 0.05em;
-  color: rgba(255,255,255,0.30);
-  margin: 0 0 20px;
-}
-
-.verse-list {
+.explore-panel {
+  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.verse-item {
+/* ── Word cloud ──────────────────────────────────────── */
+
+.explore-cloud {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  /* push word area below the tab bar without creating a hard background edge */
+  padding-top: calc(52px + env(safe-area-inset-top, 0px));
+}
+
+/* Fluid orbs — fixed so they fill the whole screen and bleed
+   through the tab bar. Visibility is controlled by the parent
+   tab-panel opacity (0 when inactive, 1 when active). */
+.explore-orbs {
+  position: fixed;
+  inset: -20%;
+  pointer-events: none;
+  z-index: 3;
+}
+.explore-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(55px) saturate(1.5);
+  opacity: 0.38;
+  will-change: transform;
+}
+.explore-orb-a {
+  width: 50%; height: 50%;
+  top: -5%; left: 5%;
+  background: rgba(var(--accent-pick), 0.70);
+  animation: xorb-a 14s ease-in-out infinite;
+}
+.explore-orb-b {
+  width: 44%; height: 44%;
+  bottom: 0; right: 0;
+  background: rgba(58, 100, 200, 0.60);
+  animation: xorb-b 18s ease-in-out infinite;
+}
+.explore-orb-c {
+  width: 40%; height: 40%;
+  top: 35%; left: 38%;
+  background: rgba(110, 72, 180, 0.48);
+  animation: xorb-c 11s ease-in-out infinite;
+}
+@keyframes xorb-a {
+  0%,100% { transform: translate(0,0) scale(1); }
+  50%      { transform: translate(18%,22%) scale(1.18); }
+}
+@keyframes xorb-b {
+  0%,100% { transform: translate(0,0) scale(1); }
+  45%     { transform: translate(-22%,-18%) scale(1.22); }
+}
+@keyframes xorb-c {
+  0%,100% { transform: translate(0,0) scale(1); }
+  60%     { transform: translate(-14%,20%) scale(0.88); }
+}
+
+/* Scalable word container (zoom/pan applied here) */
+.explore-words {
+  position: absolute;
+  inset: 0;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.explore-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.60rem;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.22);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.explore-word {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.30);
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 10px 6px;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 0.25s, transform 0.2s;
+  line-height: 1.3;
+}
+.explore-word-name { display: block; }
+.explore-word-year {
+  display: block;
+  font-size: 0.52rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: rgba(255,255,255,0.18);
+  margin-top: 2px;
+}
+.explore-word:hover { color: rgba(255,255,255,0.65); }
+.explore-word.focused {
+  color: rgba(255,255,255,0.96);
+  transform: translate(-50%, -50%) scale(1.20);
+}
+.explore-word.focused .explore-word-year { color: rgba(255,255,255,0.50); }
+.explore-word.dragging {
+  color: rgba(255,255,255,0.88);
+  transform: translate(-50%, -50%) scale(1.10);
+  z-index: 20;
+}
+
+/* ── Timeline slider ─────────────────────────────────── */
+
+.explore-timeline {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  gap: 12px;
-  transition: opacity 0.15s;
+  gap: 10px;
+  padding: 4px 20px 6px;
 }
-.verse-item:active { opacity: 0.70; }
-
-.verse-item-body { flex: 1; min-width: 0; }
-
-.verse-item-name {
-  display: block;
-  font-size: 1.55rem;
+.tl-yr {
+  font-size: 0.56rem;
   font-weight: 700;
-  color: rgba(255,255,255,0.80);
-  letter-spacing: -0.01em;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: color 0.15s;
+  letter-spacing: 0.10em;
+  color: rgba(255,255,255,0.28);
+  min-width: 38px;
+  text-align: center;
+  text-transform: uppercase;
 }
-.verse-item.verse-selected .verse-item-name { color: white; }
+.tl-yr-right { text-align: right; }
 
-.verse-item-meta {
-  display: block;
-  font-size: 0.65rem;
-  color: rgba(255,255,255,0.35);
-  margin-top: 2px;
-  letter-spacing: 0.02em;
-}
-
-.verse-item-actions {
+/* Dual-range track */
+.tl-track {
+  flex: 1;
+  position: relative;
+  height: 18px;
   display: flex;
+  align-items: center;
+}
+.tl-track::before {
+  content: "";
+  position: absolute;
+  inset: 0 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.tl-fill {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: rgba(255,255,255,0.55);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 1;
+}
+.tl-slider {
+  position: absolute;
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 2px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  pointer-events: none;
+}
+.tl-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.82);
+  cursor: pointer;
+  pointer-events: all;
+  transition: background 0.2s, transform 0.15s;
+  position: relative;
+  z-index: 2;
+}
+.tl-slider::-webkit-slider-thumb:hover,
+.tl-slider:active::-webkit-slider-thumb { background: #fff; transform: scale(1.2); }
+.tl-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.82);
+  cursor: pointer;
+  pointer-events: all;
+}
+
+/* ── Nav controls: MOVE | ALT+btns | LOOK ─────────────── */
+
+.explore-controls {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 16px 14px;
+  gap: 6px;
+}
+
+.explore-ctl-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+}
+
+/* Rings: side by side, no knob dot */
+.explore-controls .stick-ring {
+  width: clamp(96px, 28vw, 120px);
+  height: clamp(96px, 28vw, 120px);
+}
+.explore-controls .stick-knob { opacity: 0; }
+
+/* Middle column: icon buttons stacked above ALT */
+.explore-mid-col {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
 }
+.explore-icon-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+/* Alt track: match one ring height */
+.explore-controls .alt-track {
+  height: clamp(96px, 28vw, 120px);
+}
+.explore-controls .alt-group { gap: 6px; }
 
 /* ── Dark-theme overrides for audio / music browser ──────── */
 

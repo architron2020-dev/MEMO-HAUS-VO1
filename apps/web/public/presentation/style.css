@@ -1488,21 +1488,35 @@ html, .pres-body { font-family: inherit; }
 
 /* ── Nav ───────────────────────────────────────────────── */
 .pres-nav {
-  background: rgba(10,12,20,0.72) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
-  padding: 14px 20px !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: none !important;
+  padding: 18px 24px !important;
   flex-wrap: wrap !important;
   gap: 8px !important;
   z-index: 10 !important;
+  justify-content: center !important;
 }
-.pres-nav-brand { color: rgba(255,255,255,0.90) !important; font-size: 0.82rem !important; }
-.pres-nav-links { gap: 14px !important; flex-wrap: wrap !important; }
-.pres-nav-links a { color: rgba(255,255,255,0.40) !important; }
-.pres-nav-links a:hover { color: rgba(255,255,255,0.85) !important; }
-.pres-nav-links a.active { color: rgba(255,255,255,0.95) !important; }
+.pres-nav-brand { display: none !important; }
+.pres-nav-links { gap: 20px !important; flex-wrap: wrap !important; justify-content: center !important; }
+.pres-nav-links a { color: rgba(255,255,255,0.30) !important; }
+.pres-nav-links a:hover { color: rgba(255,255,255,0.80) !important; }
+.pres-nav-links a.active { color: rgba(255,255,255,0.95) !important; font-weight: 800 !important; }
 .pres-fullscreen-btn { display: none !important; }
+
+/* ── Fix white bands on image containers in dark mode ──── */
+.drawing-slide figcaption {
+  background: linear-gradient(to top, rgba(0,0,0,0.65), transparent) !important;
+  color: rgba(255,255,255,0.80) !important;
+}
+.pres-jar-shot img { background: rgba(255,255,255,0.06) !important; }
+.pres-jar-shot figcaption { color: rgba(255,255,255,0.50) !important; }
+.concept-shot figcaption { color: rgba(255,255,255,0.45) !important; }
+.pres-flow-shot figcaption { color: rgba(255,255,255,0.45) !important; }
+.pres-flow-shot img { border-color: rgba(255,255,255,0.10) !important; }
+.pres-photo-slider { background: #0b0b0d !important; }
+.pres-drawing-slider { background: transparent !important; }
 
 /* ── Deck + dots above fluid bg ───────────────────────── */
 #pres-deck { position: relative !important; z-index: 1 !important; }
@@ -1564,7 +1578,7 @@ html, .pres-body { font-family: inherit; }
 
 /* ── Concept steps ─────────────────────────────────────── */
 .concept-step { border-color: rgba(255,255,255,0.10) !important; }
-.concept-step-num { color: rgba(255,255,255,0.22) !important; }
+.concept-step-num { color: #fff !important; }
 .concept-step-label { color: rgba(255,255,255,0.85) !important; }
 .concept-step-desc { color: rgba(255,255,255,0.42) !important; }
 

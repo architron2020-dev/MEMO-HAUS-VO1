@@ -48,7 +48,6 @@
     <div id="transition-overlay"></div>
 
     <div id="placeholder">
-      <!-- Fluid beige background with adaptive colour orbs -->
       <div id="splash-fluid">
         <div class="orb orb-a"></div>
         <div class="orb orb-b"></div>
@@ -58,6 +57,7 @@
         <div class="orb orb-f"></div>
       </div>
       <div class="placeholder-inner">
+        <!-- Logo -->
         <svg class="placeholder-logo" viewBox="0 0 200 108" role="img" aria-label="Memo-Haus">
           <g transform="translate(100,32)">
             <ellipse rx="26" ry="11" fill="none" stroke="rgba(255,255,255,0.70)" stroke-width="1.6" transform="rotate(-18)"/>
@@ -74,7 +74,15 @@
             <text x="100" y="100" font-size="24" font-weight="800" letter-spacing="6" fill="rgba(255,255,255,0.95)">HAUS</text>
           </g>
         </svg>
-        <p class="placeholder-sub">from archive to participatory experience</p>
+
+        <!-- Spinner ring — same CSS border-spinner as the app's preserve screen -->
+        <div class="splash-spinner-wrap">
+          <div class="splash-spinner"></div>
+        </div>
+
+        <!-- Status text — updated by JS as scenes load -->
+        <p class="placeholder-sub" id="splash-status">entering the memory verse…</p>
+        <p class="placeholder-loading" id="splash-count"></p>
       </div>
     </div>
 
@@ -136,11 +144,6 @@
       <span class="cursor-ring"></span>
       <span class="cursor-dot"></span>
     </div>
-
-    <!-- World of Memories — loads every scene at once, spread apart in 3D
-         space, for free exploration instead of the one-at-a-time rotation -->
-    <button type="button" id="world-mode-btn" class="world-mode-btn" disabled>Enter Memory Verse</button>
-    <div id="world-debug" class="world-debug hidden"></div>
 
     <!-- Reset button and instructions removed; nav controlled via mobile app -->
 

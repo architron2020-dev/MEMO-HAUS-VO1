@@ -60,14 +60,9 @@ html, body {
   inset: 0;
   z-index: 5;
   pointer-events: none;
-  background: radial-gradient(
-    ellipse 70% 65% at 50% 50%,
-    transparent 0%,
-    transparent 40%,
-    rgba(0, 0, 0, 0.30) 65%,
-    rgba(0, 0, 0, 0.72) 82%,
-    rgba(0, 0, 0, 0.92) 100%
-  );
+  box-shadow:
+    inset 0 0 120px 60px rgba(0, 0, 0, 0.85),
+    inset 0 0 260px 120px rgba(0, 0, 0, 0.60);
   opacity: var(--vignette-opacity, 1);
 }
 
@@ -92,54 +87,83 @@ html, body {
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  background: #ede8de;
-  transition: opacity 0.8s ease;
+  background: #0d0f14;
+  transition: opacity 1.4s ease;
 }
 
-/* Fluid colour orbs inside the splash — same animation classes as upload page */
 #splash-fluid {
   position: absolute;
   inset: -25%;
-  background: #ede8de;
+  background: #0d0f14;
   overflow: hidden;
-  filter: blur(72px) saturate(1.8);
+  filter: blur(90px) saturate(1.4);
   pointer-events: none;
   z-index: 0;
+  opacity: 0.55;
 }
 
-#placeholder.hidden { opacity: 0; }
+#placeholder.hidden { opacity: 0; pointer-events: none; }
 
 .placeholder-inner {
   position: relative;
   z-index: 1;
   text-align: center;
-  max-width: 540px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
   padding: 0 24px;
 }
 
 .placeholder-logo {
   display: block;
-  width: clamp(160px, 22vw, 260px);
+  width: clamp(140px, 18vw, 220px);
   height: auto;
-  margin: 0 auto 28px;
-  opacity: 1;
-  filter: drop-shadow(0 2px 32px rgba(0,0,0,0.18));
+  margin: 0 auto 36px;
+  opacity: 0.92;
+  filter: drop-shadow(0 2px 40px rgba(120,160,255,0.18));
+}
+
+/* ── Spinner — same CSS border-spinner as app preserve screen ──── */
+.splash-spinner-wrap {
+  margin-bottom: 28px;
+}
+.splash-spinner {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid rgba(72, 145, 100, 0.35);
+  border-top-color: rgba(220, 225, 218, 0.80);
+  animation: gen-spin-simple 1.6s linear infinite;
+}
+@keyframes gen-spin-simple {
+  to { transform: rotate(360deg); }
 }
 
 .placeholder-sub {
-  margin: 0 0 12px;
-  font-size: clamp(0.75rem, 1.4vw, 0.88rem);
-  font-weight: 300;
-  color: rgba(255, 255, 255, 0.65);
-  letter-spacing: 0.14em;
+  margin: 0 0 10px;
+  font-size: clamp(0.68rem, 1.2vw, 0.80rem);
+  font-weight: 400;
+  color: rgba(255,255,255,0.50);
+  letter-spacing: 0.18em;
   text-transform: lowercase;
+}
+
+.placeholder-loading {
+  margin: 0;
+  font-size: clamp(0.58rem, 1vw, 0.68rem);
+  font-weight: 600;
+  color: rgba(255,255,255,0.22);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  min-height: 1.2em;
 }
 
 .placeholder-hint {
   margin: 0;
   font-size: clamp(0.8rem, 1.4vw, 0.95rem);
   font-weight: 600;
-  color: rgba(var(--text-base), calc(0.45 * var(--op-boost)));
+  color: rgba(255,255,255,0.32);
   letter-spacing: 0.03em;
 }
 
@@ -597,63 +621,6 @@ html, body {
 .splash-start-btn:hover { transform: scale(1.04); }
 .splash-start-btn:active { transform: scale(0.97); }
 
-/* ── World of Memories toggle ─────────────────────────────────────────── */
-
-.world-mode-btn {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  z-index: 29;
-  padding: 9px 18px;
-  border-radius: 999px;
-  border: 1px solid rgba(var(--hc), calc(0.35 * var(--op-boost)));
-  background: var(--chrome-bg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: rgba(var(--hc), calc(0.95 * var(--op-boost)));
-  font-family: inherit;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
-}
-
-.world-mode-btn:hover {
-  background: rgba(var(--hc), calc(0.14 * var(--op-boost)));
-  border-color: rgba(var(--hc), calc(0.6 * var(--op-boost)));
-}
-
-.world-mode-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.world-mode-btn.active {
-  background: rgb(var(--hc));
-  color: var(--page-bg);
-}
-
-/* Temporary on-screen diagnostics for Memory Verse loading — visible
-   instead of only logging to a console that may not be open. */
-.world-debug {
-  position: fixed;
-  top: 64px;
-  left: 20px;
-  z-index: 40;
-  max-width: 420px;
-  padding: 10px 14px;
-  background: rgba(8, 8, 12, 0.85);
-  border: 1px solid rgba(var(--hc), 0.4);
-  border-radius: 8px;
-  font-family: ui-monospace, "Courier New", monospace;
-  font-size: 0.7rem;
-  line-height: 1.6;
-  color: rgba(var(--hc), 0.9);
-  white-space: pre-wrap;
-}
-
-.world-debug.hidden { display: none; }
 
 /* ── Mobile-app style match ──────────────────────────────────────────────────
    Mirrors the tranquil white-on-dark aesthetic of the mobile app exactly:
@@ -752,23 +719,6 @@ html, body {
   font-weight: 500 !important;
 }
 
-/* ── World-mode button → white pill ─────────────────── */
-.world-mode-btn {
-  font-family: inherit !important;
-  border: none !important;
-  background: rgba(255,255,255,0.15) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  color: rgba(255,255,255,0.80) !important;
-  font-size: 0.80rem !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.01em !important;
-  text-transform: none !important;
-  padding: 11px 22px !important;
-}
-.world-mode-btn:hover:not(:disabled) { background: rgba(255,255,255,0.25) !important; color: white !important; }
-.world-mode-btn.active { background: white !important; color: rgba(0,0,0,0.78) !important; }
-.world-mode-btn:disabled { opacity: 0.28 !important; }
 
 /* ── Nav hint — tranquil ghost ─────────────────────── */
 .nav-hint-tab {

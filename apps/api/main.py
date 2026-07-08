@@ -60,6 +60,7 @@ _world_selected_at: float = 0.0
 _nav_lock = threading.Lock()
 _nav_state: dict = {"move_x":0,"move_z":0,"move_y":0,"turn_x":0,"turn_y":0,"gyro":False,"gyro_yaw":None,"gyro_pitch":None,"ts":0}
 _reset_ts: float = 0.0
+_scene_positions: dict = {}  # scene_id → {x_pct, y_pct}
 
 
 class SelectScenePayload(BaseModel):
@@ -68,6 +69,12 @@ class SelectScenePayload(BaseModel):
 
 class WorldSelectionPayload(BaseModel):
     scene_ids: list[str]
+
+
+class ScenePositionPayload(BaseModel):
+    scene_id: str
+    x_pct: float
+    y_pct: float
 
 
 class NavPayload(BaseModel):
@@ -88,6 +95,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Scene assets (splats, source photos, audio) are written once under a
+# unique hashed scene id and never modified in place — only ever deleted —
+# so it's safe to tell browsers to cache them forever instead of
+# re-downloading the same multi-megabyte PLY on every viewer refresh.
+_IMMUTABLE_STATIC_PREFIXES = ("/outputs/", "/uploads/", "/audio/")
+
+
+@app.middleware("http")
+async def cache_immutable_static(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith(_IMMUTABLE_STATIC_PREFIXES) and response.status_code == 200:
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
 def _warmup() -> None:
@@ -173,6 +194,17 @@ def set_navigate(payload: NavPayload) -> dict:
 def get_navigate() -> dict:
     with _nav_lock:
         return dict(_nav_state)
+
+
+@app.post("/api/scene-position")
+def set_scene_position(payload: ScenePositionPayload) -> dict:
+    _scene_positions[payload.scene_id] = {"x_pct": payload.x_pct, "y_pct": payload.y_pct}
+    return {"ok": True}
+
+
+@app.get("/api/scene-positions")
+def get_scene_positions() -> dict:
+    return dict(_scene_positions)
 
 
 @app.post("/api/reset-view")
