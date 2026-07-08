@@ -1336,6 +1336,22 @@ a.tab-btn { text-decoration: none; }
   /* transition applied by JS only on release */
 }
 
+/* Fixed reference dot at the ring's true centre — stays put while the knob
+   (above, brighter and larger) moves away from it, so the rest/neutral
+   position is always visible even mid-drag. Mirrors .alt-center-mark's role
+   for the linear altitude slider. */
+.stick-center-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.22);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
 /* ALT pill — height matches 2 circles + their gap */
 .alt-track {
   width: 26px;
@@ -1481,7 +1497,15 @@ a.tab-btn { text-decoration: none; }
 
 .explore-word {
   position: absolute;
-  transform: translate(-50%, -50%);
+  /* Counter-scale by 1/zoom: #explore-words (the parent) is what actually
+     zooms/pans, so a label's POSITION spreads apart with it — but without
+     this, the label's own TEXT would grow at the exact same rate as the gaps
+     between labels, so two overlapping words would stay just as overlapped
+     (in relative terms) no matter how far you zoomed in. Counter-scaling
+     keeps every label a constant on-screen size regardless of zoom, so
+     zooming in actually, physically separates any two labels — see
+     _applyCloudTransform() in upload.js, which sets --zoom on the parent. */
+  transform: translate(-50%, -50%) scale(calc(1 / var(--zoom, 1)));
   background: none;
   border: none;
   color: rgba(255,255,255,0.30);
@@ -1496,7 +1520,10 @@ a.tab-btn { text-decoration: none; }
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   white-space: nowrap;
-  transition: color 0.25s, transform 0.2s;
+  /* No transform transition — the counter-scale must track a pinch/wheel
+     gesture 1:1, in real time; a lagged transition would make zoom feel
+     swimmy instead of responsive. Colour (hover/focus) still eases. */
+  transition: color 0.25s;
   line-height: 1.3;
 }
 .explore-word-name { display: block; }
@@ -1511,7 +1538,7 @@ a.tab-btn { text-decoration: none; }
 .explore-word:hover { color: rgba(255,255,255,0.65); }
 .explore-word.focused {
   color: rgba(255,255,255,0.96);
-  transform: translate(-50%, -50%) scale(1.20);
+  transform: translate(-50%, -50%) scale(calc(1.20 / var(--zoom, 1)));
 }
 .explore-word.focused .explore-word-year { color: rgba(255,255,255,0.50); }
 
@@ -1524,7 +1551,11 @@ a.tab-btn { text-decoration: none; }
   width: 0; height: 0;
   pointer-events: none;
   z-index: 2;
-  transition: left 0.18s linear, top 0.18s linear, transform 0.18s linear;
+  /* Only smooth position, NOT rotation: the heading (a CSS rotate in degrees)
+     wraps from +180 to -180 as the view crosses straight-ahead, and animating
+     that jump makes the arrow spin ~360° — which reads as a random 180 flip.
+     Snapping the rotation instantly avoids it. */
+  transition: left 0.18s linear, top 0.18s linear;
 }
 .map-camera-cone {
   position: absolute;

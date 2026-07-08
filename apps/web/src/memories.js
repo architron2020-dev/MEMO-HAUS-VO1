@@ -247,6 +247,11 @@ async function selectMemory(memory, cardEl) {
     if (activeCardEl) activeCardEl.classList.remove("active");
     cardEl.classList.add("active");
     activeCardEl = cardEl;
+    // Optimistic: the viewer will confirm this via its own camera-state POST
+    // in a moment, but marking it here too means pollFocusedMemory() below
+    // doesn't see stale state and flicker the highlight back during that
+    // brief window.
+    _lastPolledFocusId = memory.id;
 
     statusEl.textContent = `Now showing "${memory.name}" on the viewer.`;
   } catch (err) {
@@ -255,5 +260,30 @@ async function selectMemory(memory, cardEl) {
   }
 }
 
+// Mirrors whichever memory the viewer is currently focused on, however that
+// focus came about — tapping "Show" on a card here is one way, but the
+// viewer ALSO auto-focuses a memory just by navigating up to one and
+// stopping (dwell-to-focus), which never touches this page's own
+// selectMemory() at all. Reuses the camera-state the viewer already posts a
+// few times a second for the map's "you are here" marker. Purely visual —
+// never re-POSTs /api/select-scene, so it can't loop back into re-flying the
+// viewer's camera every poll tick.
+let _lastPolledFocusId; // undefined = not polled yet, distinct from null = polled, nothing focused
+
+async function pollFocusedMemory() {
+  try {
+    const r = await fetch("/api/camera-state", { cache: "no-store" });
+    if (!r.ok) return;
+    const { focused_scene_id } = await r.json();
+    if (focused_scene_id === _lastPolledFocusId) return;
+    _lastPolledFocusId = focused_scene_id;
+    if (activeCardEl) activeCardEl.classList.remove("active");
+    activeCardEl = focused_scene_id ? (renderedCards.individual.get(focused_scene_id) || null) : null;
+    if (activeCardEl) activeCardEl.classList.add("active");
+  } catch {}
+}
+
 loadMemories();
 setInterval(loadMemories, 15_000);
+pollFocusedMemory();
+setInterval(pollFocusedMemory, 1000);

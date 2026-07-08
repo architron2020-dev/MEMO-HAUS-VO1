@@ -990,10 +990,20 @@ const _cloudPtrs = new Map(); // pointerId → {x, y}
 let _pinchDist0 = null, _pinchZoom0 = 1;
 let _panning = false, _panPt = null;
 
+// Practically unlimited — high enough that any two labels, no matter how
+// close their underlying x_pct/y_pct, can always be zoomed apart into
+// separate, non-overlapping targets (see the --zoom counter-scale in
+// upload.css). ZOOM_MIN still shows the whole cloud comfortably zoomed out.
+const ZOOM_MIN = 0.3, ZOOM_MAX = 60;
+
 function _applyCloudTransform() {
   if (!exploreWordsEl) return;
   exploreWordsEl.style.transform =
     `translate(${_cPanX}px,${_cPanY}px) scale(${_cZoom})`;
+  // Cascades to every .explore-word's `scale(calc(1 / var(--zoom)))` — the
+  // one line that makes zooming actually separate overlapping labels instead
+  // of enlarging the whole overlapping mess together.
+  exploreWordsEl.style.setProperty("--zoom", _cZoom);
 }
 
 function _clampPan() {
@@ -1006,7 +1016,7 @@ function _clampPan() {
 exploreCloudEl?.addEventListener("wheel", e => {
   e.preventDefault();
   const f = e.deltaY < 0 ? 1.12 : 0.89;
-  _cZoom = Math.max(0.35, Math.min(4.5, _cZoom * f));
+  _cZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, _cZoom * f));
   _clampPan();
   _applyCloudTransform();
 }, { passive: false });
@@ -1035,7 +1045,7 @@ exploreCloudEl?.addEventListener("pointermove", e => {
   if (_cloudPtrs.size === 2 && _pinchDist0) {
     const pts = [..._cloudPtrs.values()];
     const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-    _cZoom = Math.max(0.35, Math.min(4.5, _pinchZoom0 * dist / _pinchDist0));
+    _cZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, _pinchZoom0 * dist / _pinchDist0));
     _clampPan();
     _applyCloudTransform();
   } else if (_panning && _panPt) {
@@ -1127,7 +1137,7 @@ async function _pollCameraState() {
   try {
     const r = await fetch("/api/camera-state", { cache: "no-store" });
     if (!r.ok) return;
-    const { x, z, yaw, ts } = await r.json();
+    const { x, z, yaw, ts, focused_scene_id } = await r.json();
     const el = _ensureCamMarker();
     if (!el) return;
     if (!ts) { el.style.display = "none"; return; }
@@ -1141,6 +1151,19 @@ async function _pollCameraState() {
     el.style.left = `${xp * 100}%`;
     el.style.top  = `${yp * 100}%`;
     el.style.transform = `rotate(${deg}deg)`;
+
+    // Mirror whichever memory the viewer is currently focused on — a tap
+    // here (focusExploreScene()) is one way that happens, but the viewer
+    // ALSO auto-focuses a memory just by navigating up to one and stopping
+    // (dwell-to-focus), which never goes through a tap at all. This is the
+    // only way the map finds out about that and highlights the right word.
+    // Purely visual — does NOT re-POST /api/select-scene, so it can't loop
+    // back into re-flying the viewer's camera on every poll tick.
+    if (focused_scene_id !== _exploreFocusedId) {
+      _exploreWords.forEach(({ el: wEl }) => wEl.classList.remove("focused"));
+      if (focused_scene_id) _exploreWords.get(focused_scene_id)?.el.classList.add("focused");
+      _exploreFocusedId = focused_scene_id;
+    }
   } catch {}
 }
 
@@ -1350,6 +1373,14 @@ function initJoystick(stickEl, knobEl, onUpdate) {
   let _pid       = null;
   let _wasAtMax  = false;
 
+  // Small deadzone right around centre — without it, an imprecisely-centred
+  // thumb (or a touch that never releases to the EXACT (0,0) pixel) reports a
+  // tiny but persistent nonzero nx/ny. That's enough, combined with the
+  // mobile move-speed multiplier, to keep nudging the camera every tick —
+  // never far, but far enough that it never reads as "stopped", which is
+  // what silently broke dwell-to-focus on mobile.
+  const STICK_DEADZONE = 0.08;
+
   function getPos(e) {
     const rect = stickEl.getBoundingClientRect();
     const ox = e.clientX - (rect.left + rect.width  / 2);
@@ -1358,8 +1389,11 @@ function initJoystick(stickEl, knobEl, onUpdate) {
     const dist = Math.hypot(ox, oy);
     const atMax = dist > maxR;
     const scale = atMax ? maxR / dist : 1;
+    const norm = dist / maxR;
+    const dead = norm < STICK_DEADZONE;
     return { dx: ox * scale, dy: oy * scale,
-             nx: (ox * scale) / maxR, ny: (oy * scale) / maxR, atMax };
+             nx: dead ? 0 : (ox * scale) / maxR,
+             ny: dead ? 0 : (oy * scale) / maxR, atMax };
   }
 
   stickEl.addEventListener("pointerdown", (e) => {
