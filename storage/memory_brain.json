@@ -1,0 +1,496 @@
+{
+  "locations": {
+    "yarn-bombing-autostadt": {
+      "location_slug": "yarn-bombing-autostadt",
+      "location_label": "Yarn Bombing, Autostadt",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "yarn-bombing-autostadt_2026_during-my-exploration-in_a8f5c4"
+          ],
+          "years": [
+            "2026"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    },
+    "rathaus": {
+      "location_slug": "rathaus",
+      "location_label": "Rathaus",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "rathaus_2025_waiting-in-the-landscape_f3cae3"
+          ],
+          "years": [
+            "2025"
+          ]
+        },
+        "1970s": {
+          "scene_ids": [
+            "rathaus_1973_shopping-in-the-market-o_1201f8"
+          ],
+          "years": [
+            "1973"
+          ]
+        }
+      },
+      "gaps": [
+        "1980s",
+        "1990s",
+        "2000s",
+        "2010s"
+      ],
+      "likely_overlaps": [
+        {
+          "scene_a": "rathaus_2025_waiting-in-the-landscape_f3cae3",
+          "scene_b": "rathaus_1973_shopping-in-the-market-o_1201f8",
+          "similarity": 0.625
+        }
+      ],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": [
+        {
+          "scene_a": "rathaus_2025_waiting-in-the-landscape_f3cae3",
+          "scene_b": "rathaus_1973_shopping-in-the-market-o_1201f8"
+        }
+      ]
+    },
+    "porshestrasse": {
+      "location_slug": "porshestrasse",
+      "location_label": "Porshestrasse",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "porshestrasse_2023_outside-alvar-aalto-libr_b42198"
+          ],
+          "years": [
+            "2023"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    },
+    "phaeno-building": {
+      "location_slug": "phaeno-building",
+      "location_label": "Phaeno Building",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "phaeno-building_2026_on-the-day-one-after-get_20803b",
+            "phaeno-building_2025_exploring-the-beautiful_765845",
+            "phaeno-building_2026_stitching-memories-test_9fe12f",
+            "phaeno-building_2026_stitching-memories-test_ded189",
+            "phaeno-building_2026_stitching-memories-test_5122d4",
+            "phaeno-building_2026_stitching-memories-test_47cd43",
+            "phaeno-building_2026_stitching-memories-test_3482cf",
+            "phaeno-building_2026_stitching-memories-test_ab345f",
+            "phaeno-building_2026_stitching-memories-test_5578bd",
+            "phaeno-building_2026_stitch-test-02_03e27b",
+            "phaeno-building_2026_testing-stitch_d0f88e"
+          ],
+          "years": [
+            "2026",
+            "2025"
+          ]
+        },
+        "undated": {
+          "scene_ids": [
+            "phaeno-building_test_f88bd4"
+          ],
+          "years": []
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [
+        {
+          "scene_a": "phaeno-building_2026_stitching-memories-test_9fe12f",
+          "scene_b": "phaeno-building_2026_stitching-memories-test_5578bd",
+          "similarity": 0.984
+        },
+        {
+          "scene_a": "phaeno-building_2026_stitching-memories-test_ded189",
+          "scene_b": "phaeno-building_2026_stitching-memories-test_5122d4",
+          "similarity": 1.0
+        },
+        {
+          "scene_a": "phaeno-building_2026_stitching-memories-test_ded189",
+          "scene_b": "phaeno-building_2026_stitch-test-02_03e27b",
+          "similarity": 1.0
+        },
+        {
+          "scene_a": "phaeno-building_2026_stitching-memories-test_5122d4",
+          "scene_b": "phaeno-building_2026_stitch-test-02_03e27b",
+          "similarity": 1.0
+        },
+        {
+          "scene_a": "phaeno-building_2026_stitching-memories-test_ab345f",
+          "scene_b": "phaeno-building_2026_testing-stitch_d0f88e",
+          "similarity": 1.0
+        }
+      ],
+      "confirmed_overlaps": [
+        {
+          "scene_a": "phaeno-building_2026_stitching-memories-test_9fe12f",
+          "scene_b": "phaeno-building_2026_stitching-memories-test_5578bd",
+          "transform_b_onto_a": [
+            [
+              0.9998908638954163,
+              -0.0020155557431280613,
+              0.014634990133345127,
+              -0.007503504399210215
+            ],
+            [
+              0.0019144094549119473,
+              0.999974250793457,
+              0.006921988446265459,
+              -0.003224820364266634
+            ],
+            [
+              -0.014648564159870148,
+              -0.006893215700984001,
+              0.9998689293861389,
+              -0.002963162725791335
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "confidence": 2.592555284500122,
+          "stitched_ply": "phaeno-building_phaeno-building_2026_stitching-memories-test_9fe12f_phaeno-building_2026_stitching-memories-test_5578bd.ply"
+        },
+        {
+          "scene_a": "phaeno-building_2026_stitching-memories-test_ded189",
+          "scene_b": "phaeno-building_2026_stitching-memories-test_5122d4",
+          "transform_b_onto_a": [
+            [
+              0.9998664855957031,
+              0.0049924179911613464,
+              0.015561718493700027,
+              -0.005472641903907061
+            ],
+            [
+              -0.004760613199323416,
+              0.9998776912689209,
+              -0.014897455461323261,
+              0.006351895164698362
+            ],
+            [
+              -0.015634188428521156,
+              0.014821382239460945,
+              0.9997679591178894,
+              0.004795461427420378
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "confidence": 3.138009548187256,
+          "stitched_ply": "phaeno-building_phaeno-building_2026_stitching-memories-test_ded189_phaeno-building_2026_stitching-memories-test_5122d4.ply"
+        },
+        {
+          "scene_a": "phaeno-building_2026_stitching-memories-test_ded189",
+          "scene_b": "phaeno-building_2026_stitch-test-02_03e27b",
+          "transform_b_onto_a": [
+            [
+              0.9998664855957031,
+              0.0049924179911613464,
+              0.015561718493700027,
+              -0.005472641903907061
+            ],
+            [
+              -0.004760613199323416,
+              0.9998776912689209,
+              -0.014897455461323261,
+              0.006351895164698362
+            ],
+            [
+              -0.015634188428521156,
+              0.014821382239460945,
+              0.9997679591178894,
+              0.004795461427420378
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "confidence": 3.138009548187256,
+          "stitched_ply": "phaeno-building_phaeno-building_2026_stitching-memories-test_ded189_phaeno-building_2026_stitch-test-02_03e27b.ply"
+        },
+        {
+          "scene_a": "phaeno-building_2026_stitching-memories-test_5122d4",
+          "scene_b": "phaeno-building_2026_stitch-test-02_03e27b",
+          "transform_b_onto_a": [
+            [
+              0.9998664855957031,
+              0.0049924179911613464,
+              0.015561718493700027,
+              -0.005472641903907061
+            ],
+            [
+              -0.004760613199323416,
+              0.9998776912689209,
+              -0.014897455461323261,
+              0.006351895164698362
+            ],
+            [
+              -0.015634188428521156,
+              0.014821382239460945,
+              0.9997679591178894,
+              0.004795461427420378
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "confidence": 3.138009548187256,
+          "stitched_ply": "phaeno-building_phaeno-building_2026_stitching-memories-test_5122d4_phaeno-building_2026_stitch-test-02_03e27b.ply"
+        }
+      ],
+      "rejected_overlaps": []
+    },
+    "autostadt": {
+      "location_slug": "autostadt",
+      "location_label": "Autostadt",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "autostadt_2026_i-was-waiting-for-the-fa_b329f7",
+            "autostadt_2026_waiting-for-my-car-deliv_bfb6d7"
+          ],
+          "years": [
+            "2026"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [
+        {
+          "scene_a": "autostadt_2026_i-was-waiting-for-the-fa_b329f7",
+          "scene_b": "autostadt_2026_waiting-for-my-car-deliv_bfb6d7",
+          "similarity": 0.562
+        }
+      ],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": [
+        {
+          "scene_a": "autostadt_2026_i-was-waiting-for-the-fa_b329f7",
+          "scene_b": "autostadt_2026_waiting-for-my-car-deliv_bfb6d7"
+        }
+      ]
+    },
+    "vw-werk": {
+      "location_slug": "vw-werk",
+      "location_label": "VW-WERK",
+      "decades": {
+        "1960s": {
+          "scene_ids": [
+            "vw-werk_1960_after-my-vw-beetle-deliv_bd8d4a"
+          ],
+          "years": [
+            "1960"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    },
+    "kinderspielpatz-bei-teichgarten": {
+      "location_slug": "kinderspielpatz-bei-teichgarten",
+      "location_label": "Kinderspielpatz - bei Teichgarten",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "kinderspielpatz-bei-teic_2023_family-picnic-in-the-spi_7eb5f4",
+            "kinderspielpatz-bei-teic_2020_with-my-lovely-daughter_d5ba6b"
+          ],
+          "years": [
+            "2023",
+            "2020"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [
+        {
+          "scene_a": "kinderspielpatz-bei-teic_2023_family-picnic-in-the-spi_7eb5f4",
+          "scene_b": "kinderspielpatz-bei-teic_2020_with-my-lovely-daughter_d5ba6b",
+          "similarity": 0.469
+        }
+      ],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": [
+        {
+          "scene_a": "kinderspielpatz-bei-teic_2023_family-picnic-in-the-spi_7eb5f4",
+          "scene_b": "kinderspielpatz-bei-teic_2020_with-my-lovely-daughter_d5ba6b"
+        }
+      ]
+    },
+    "fallersleben": {
+      "location_slug": "fallersleben",
+      "location_label": "Fallersleben",
+      "decades": {
+        "1990s": {
+          "scene_ids": [
+            "fallersleben_1990_during-the-crossing-of-e_308d93"
+          ],
+          "years": [
+            "1990"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    },
+    "imperial-kino": {
+      "location_slug": "imperial-kino",
+      "location_label": "Imperial Kino",
+      "decades": {
+        "1980s": {
+          "scene_ids": [
+            "imperial-kino_1988_on-my-way-to-the-kino-to_ec4cd5"
+          ],
+          "years": [
+            "1988"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    },
+    "brauhausgasse-weimar": {
+      "location_slug": "brauhausgasse-weimar",
+      "location_label": "Brauhausgasse,Weimar",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "brauhausgasse-weimar_2026_capturing-the-activities_ea2365"
+          ],
+          "years": [
+            "2026"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    },
+    "falkenburg-weimar": {
+      "location_slug": "falkenburg-weimar",
+      "location_label": "Falkenburg, Weimar",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "falkenburg-weimar_2025_my-first-day-in-weimar-w_49dcba"
+          ],
+          "years": [
+            "2025"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    },
+    "frauenplan-weimar": {
+      "location_slug": "frauenplan-weimar",
+      "location_label": "Frauenplan,Weimar",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "frauenplan-weimar_2026_chill-evening-in-frauenp_9296e2"
+          ],
+          "years": [
+            "2026"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    },
+    "frauentorstra-e-weimar": {
+      "location_slug": "frauentorstra-e-weimar",
+      "location_label": "Frauentorstra\u00dfe, Weimar",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "frauentorstra-e-weimar_2026_a-chill-walk-to-frauenpl_79ec75"
+          ],
+          "years": [
+            "2026"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    },
+    "stadtschloss-weimar": {
+      "location_slug": "stadtschloss-weimar",
+      "location_label": "Stadtschloss,  Weimar",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "stadtschloss-weimar_2026_waiting-for-my-friend-in_060c5e"
+          ],
+          "years": [
+            "2026"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    },
+    "ilm-park-weimar": {
+      "location_slug": "ilm-park-weimar",
+      "location_label": "Ilm Park Weimar",
+      "decades": {
+        "2020s": {
+          "scene_ids": [
+            "ilm-park-weimar_2026_waiting-for-my-friend-at_d62002"
+          ],
+          "years": [
+            "2026"
+          ]
+        }
+      },
+      "gaps": [],
+      "likely_overlaps": [],
+      "confirmed_overlaps": [],
+      "rejected_overlaps": []
+    }
+  },
+  "updated_at": 1783090019.2072055
+}

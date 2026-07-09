@@ -1,0 +1,10 @@
+# Large binary storage assets (visitor uploads, generated splats/audio) — see storage/
+storage/**/*.ply filter=lfs diff=lfs merge=lfs -text
+storage/**/*.proxy filter=lfs diff=lfs merge=lfs -text
+storage/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+storage/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+storage/**/*.png filter=lfs diff=lfs merge=lfs -text
+storage/**/*.webp filter=lfs diff=lfs merge=lfs -text
+storage/**/*.wav filter=lfs diff=lfs merge=lfs -text
+storage/**/*.webm filter=lfs diff=lfs merge=lfs -text
+storage/**/*.mp3 filter=lfs diff=lfs merge=lfs -text

@@ -11,8 +11,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Generated scenes / uploads (runtime storage)
-/storage/
 
 # OS
 .DS_Store
