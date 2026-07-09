@@ -33,10 +33,11 @@ jobs:
           # Base path for the project Pages site. Change if you move to a root
           # domain (set to "/").
           MEMO_WEB_BASE: /MEMO-HAUS-VO1/
-          # Optional: bake the backend origin at build time. Leaving this unset
-          # falls back to public/runtime-config.js (window.MEMO_API_BASE), which
-          # you can edit on the deployed site without rebuilding.
-          VITE_MEMO_API_BASE: ${{ vars.MEMO_API_BASE }}
+          # The Pages copy is a different origin than the backend, so it must
+          # call the real ki-pc backend absolutely (which sends CORS *). The
+          # ki-pc build itself leaves this unset and stays same-origin. Override
+          # with a repo variable MEMO_API_BASE if the backend host changes.
+          VITE_MEMO_API_BASE: ${{ vars.MEMO_API_BASE || 'https://ki-pc.architektur.uni-weimar.de' }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/web/dist
