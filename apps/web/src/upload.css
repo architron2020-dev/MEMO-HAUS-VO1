@@ -913,14 +913,22 @@ body.nav-gesture-active .explore-orb {
 
 .tab-bar {
   position: fixed;
+  /* Pinned to the true top edge (0), NOT env(safe-area-inset-top) — that
+     used to push the bar's own background down past the notch/status-bar
+     area, leaving that whole strip uncovered by the blur/tint (and on a
+     phone with a notch, in fullscreen with no OS chrome to mask it, that
+     showed up as a hard, un-adapted seam right at the notch on some
+     phones and not others depending on their inset size). The backdrop
+     itself now always spans the full top of the screen, behind the notch
+     included; only the actual BUTTON content is pushed down clear of it,
+     via padding-top below. */
   top: 0;
-  top: env(safe-area-inset-top, 0);
   left: 0;
   right: 0;
   z-index: 80;
   display: flex;
   gap: 0;
-  padding: 14px 24px 34px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 24px 34px;
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -934,8 +942,14 @@ body.nav-gesture-active .explore-orb {
   background: rgba(20, 22, 30, 0.38);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  -webkit-mask-image: linear-gradient(to bottom, black 45%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 45%, transparent 100%);
+  /* Fixed-pixel fade zone (the last 34px), not a percentage of the box's
+     total height — the box's height itself varies with the notch/inset
+     size (see padding-top above), and a percentage-based stop would shift
+     with it: fine on one phone, cutting into the actual button text on
+     another with a bigger notch. Anchoring the fade to an absolute
+     distance from the bottom keeps it correct on any device. */
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 34px), transparent 100%);
+  mask-image: linear-gradient(to bottom, black calc(100% - 34px), transparent 100%);
   /* The extra bottom padding above exists only so the mask has room to fade
      out smoothly — it isn't meant to be an interactive area. Without this,
      that fully-transparent-looking strip would still swallow taps meant for

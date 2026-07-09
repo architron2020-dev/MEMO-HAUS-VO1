@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Memo-Haus Brochure</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
+    background: #0e1220;
+    color: #0b0b0d;
+  }
+  .page {
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse 70% 45% at 15% 10%, rgba(28,118,224,0.55), transparent 60%),
+      radial-gradient(ellipse 60% 45% at 90% 20%, rgba(224,148,80,0.35), transparent 60%),
+      radial-gradient(ellipse 65% 55% at 80% 95%, rgba(48,155,238,0.40), transparent 60%),
+      radial-gradient(ellipse 55% 45% at 5% 90%, rgba(28,118,224,0.30), transparent 60%),
+      linear-gradient(160deg, #12162a 0%, #0e1220 55%, #0a0c16 100%);
+    color: #fff;
+    padding: 20mm 18mm;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ─────────────────────────────────────────── */
+  .header { display: flex; align-items: center; gap: 6mm; }
+  .logo { width: 20mm; height: auto; flex-shrink: 0; }
+  .brand-title { font-size: 9mm; font-weight: 800; letter-spacing: 1mm; line-height: 1; margin: 0; }
+  .brand-tag { font-size: 3.4mm; font-weight: 600; letter-spacing: 0.3mm; color: rgba(255,255,255,0.62); margin: 2mm 0 0; }
+
+  /* ── Headline ───────────────────────────────────────── */
+  .headline {
+    margin: 14mm 0 4mm;
+    font-size: 11mm;
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    max-width: 150mm;
+  }
+  .sub {
+    font-size: 4.4mm;
+    font-weight: 600;
+    line-height: 1.5;
+    color: rgba(255,255,255,0.70);
+    max-width: 140mm;
+    margin: 0 0 12mm;
+  }
+
+  /* ── Steps ──────────────────────────────────────────── */
+  .steps {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8mm;
+    flex: 1;
+  }
+  .step {
+    background: rgba(255,255,255,0.05);
+    border: 0.3mm solid rgba(255,255,255,0.12);
+    border-radius: 5mm;
+    padding: 7mm;
+    display: flex;
+    flex-direction: column;
+    gap: 3mm;
+  }
+  .step-num {
+    font-size: 3.2mm;
+    font-weight: 800;
+    letter-spacing: 0.4mm;
+    color: rgb(105, 175, 250);
+  }
+  .step-icon { width: 9mm; height: 9mm; stroke: #fff; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .step-title { font-size: 5mm; font-weight: 800; margin: 0; }
+  .step-desc { font-size: 3.6mm; font-weight: 500; line-height: 1.5; color: rgba(255,255,255,0.68); margin: 0; }
+
+  /* ── Footer ─────────────────────────────────────────── */
+  .footer {
+    margin-top: 10mm;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 6mm;
+    border-top: 0.3mm solid rgba(255,255,255,0.14);
+  }
+  .footer-text { font-size: 3.4mm; font-weight: 600; color: rgba(255,255,255,0.55); }
+  .footer-place { font-size: 3.4mm; font-weight: 800; color: #fff; letter-spacing: 0.3mm; }
+</style>
+</head>
+<body>
+  <div class="page">
+
+    <div class="header">
+      <svg class="logo" viewBox="0 0 200 108" role="img" aria-label="Memo-Haus">
+        <g transform="translate(100,32)">
+          <ellipse rx="26" ry="11" fill="none" stroke="rgb(105,175,250)" stroke-width="2.2" transform="rotate(-18)"/>
+          <circle r="18" fill="none" stroke="rgb(105,175,250)" stroke-width="2.2"/>
+          <line x1="-18" y1="0" x2="-24" y2="0" stroke="rgb(105,175,250)" stroke-width="2.4"/>
+          <line x1="18" y1="0" x2="24" y2="0" stroke="rgb(105,175,250)" stroke-width="2.4"/>
+          <circle r="4" fill="rgb(105,175,250)"/>
+          <circle r="1.6" cx="-0.8" cy="-0.8" fill="#fff"/>
+        </g>
+      </svg>
+      <div>
+        <p class="brand-title">MEMO&nbsp;HAUS</p>
+        <p class="brand-tag">FROM ARCHIVE TO PARTICIPATORY EXPERIENCE</p>
+      </div>
+    </div>
+
+    <h1 class="headline">Your memory belongs here too.</h1>
+    <p class="sub">
+      A shared, growing archive of Wolfsburg, built from the photos, voices, and stories of the
+      people who actually live here. Scan the code, add yours, and step inside everyone else's.
+    </p>
+
+    <div class="steps">
+
+      <div class="step">
+        <span class="step-num">01</span>
+        <svg class="step-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="2.5" height="2.5" fill="#fff" stroke="none"/><rect x="18.5" y="15" width="2.5" height="2.5" fill="#fff" stroke="none"/><rect x="15" y="18.5" width="2.5" height="2.5" fill="#fff" stroke="none"/><rect x="18.5" y="18.5" width="2.5" height="2.5" fill="#fff" stroke="none"/></svg>
+        <p class="step-title">Scan the code</p>
+        <p class="step-desc">Point your phone at the QR code on the pavilion. No app to install, it opens straight in your browser.</p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">02</span>
+        <svg class="step-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M3 15l5-5 4 4 4-4 5 5"/><rect x="10.5" y="19" width="3" height="3" rx="1"/></svg>
+        <p class="step-title">Share a memory</p>
+        <p class="step-desc">Upload a photo, place it on the map, and write what you remember. Add a voice note or a clip of music if you like.</p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">03</span>
+        <svg class="step-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.3" fill="#fff" stroke="none"/><circle cx="7" cy="8" r="1" fill="#fff" stroke="none"/><circle cx="17" cy="8" r="1" fill="#fff" stroke="none"/><circle cx="7" cy="16" r="1" fill="#fff" stroke="none"/><circle cx="17" cy="16" r="1" fill="#fff" stroke="none"/><circle cx="12" cy="4" r="1" fill="#fff" stroke="none"/><circle cx="12" cy="20" r="1" fill="#fff" stroke="none"/><circle cx="4" cy="12" r="1" fill="#fff" stroke="none"/><circle cx="20" cy="12" r="1" fill="#fff" stroke="none"/></svg>
+        <p class="step-title">Watch it come to life</p>
+        <p class="step-desc">Your photo is rebuilt into a 3D scene of drifting particles and joins the shared field on the pavilion's display.</p>
+      </div>
+
+      <div class="step">
+        <span class="step-num">04</span>
+        <svg class="step-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="#fff" stroke="none"/></svg>
+        <p class="step-title">Explore everyone's</p>
+        <p class="step-desc">Move through the shared map with your phone as a remote. Linger near a memory and it opens itself, story, sound and all.</p>
+      </div>
+
+    </div>
+
+    <div class="footer">
+      <span class="footer-text">A participatory memory archive, built with the people of</span>
+      <span class="footer-place">Wolfsburg</span>
+    </div>
+
+  </div>
+</body>
+</html>

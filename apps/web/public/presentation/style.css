@@ -1536,10 +1536,19 @@ html, .pres-body { font-family: inherit; }
   background: rgba(11, 13, 20, 0.42) !important;
   backdrop-filter: blur(22px) !important;
   -webkit-backdrop-filter: blur(22px) !important;
-  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 100%) !important;
-  mask-image: linear-gradient(to bottom, black 55%, transparent 100%) !important;
+  /* Fixed-pixel fade zone, not a percentage — the box's total height varies
+     with the notch/inset padded in below, and a percentage stop would drift
+     with it: correct on one phone, cutting into the nav text on another
+     with a bigger notch. An absolute distance from the bottom stays correct
+     on any device. */
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 30px), transparent 100%) !important;
+  mask-image: linear-gradient(to bottom, black calc(100% - 30px), transparent 100%) !important;
   border-bottom: none !important;
-  padding: 18px 24px 30px !important;
+  /* env(safe-area-inset-top) pushes the actual nav links down clear of a
+     notch/status-bar/Dynamic-Island — top:0 above (unchanged) still keeps
+     the backdrop itself spanning the full top of the screen, behind the
+     notch included, so there's no uncovered strip there either. */
+  padding: calc(18px + env(safe-area-inset-top, 0px)) 24px 30px !important;
   flex-wrap: wrap !important;
   gap: 8px !important;
   z-index: 60 !important;

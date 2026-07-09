@@ -1586,21 +1586,7 @@ function buildWordCloud(allScenes, positions) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ scene_id: scene.id, x_pct: pos.x_pct, y_pct: pos.y_pct }),
-        })
-          .then(r => r.ok ? r.json() : null)
-          .then(resolved => {
-            // The server pushes the drop point away from anything it'd
-            // otherwise land on top of (see _resolve_no_overlap in
-            // main.py) — if it moved the spot, snap the word to match so
-            // it doesn't sit visually overlapping until the next reload.
-            if (!resolved) return;
-            if (resolved.x_pct === pos.x_pct && resolved.y_pct === pos.y_pct) return;
-            pos.x_pct = resolved.x_pct;
-            pos.y_pct = resolved.y_pct;
-            el.style.left = `${pos.x_pct * 100}%`;
-            el.style.top  = `${pos.y_pct * 100}%`;
-          })
-          .catch(() => {});
+        }).catch(() => {});
         haptic(20);
       } else if (!pinchInvolved && !deleteRequested) {
         // A genuine tap — not a drag, and this finger was never part of a
