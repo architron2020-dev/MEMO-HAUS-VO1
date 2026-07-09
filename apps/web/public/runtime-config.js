@@ -12,4 +12,4 @@
 // Leave it empty ("") for local `npm run dev`, where the Vite proxy serves the
 // backend on the same origin. You can edit this file on the deployed site to
 // swap backends without rebuilding.
-window.MEMO_API_BASE = "";
+window.MEMO_API_BASE = "https://memo.haus.com";
