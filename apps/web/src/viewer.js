@@ -1057,14 +1057,9 @@ function applySceneFocus(sceneId, worldPos) {
 
 // Explicit selection (click, mobile pick, slideshow advance): flies the
 // camera to the memory's canonical front view, then applies focus.
-// Frame the scene's actual centre of mass (worldPos + centroid), NOT the raw
-// map slot — a splat whose mass sits off its origin would otherwise put the
-// camera looking at empty space beside/below it ("misplaced camera"). The
-// centre also anchors the spatial audio so it comes from the visible memory.
 function focusWorldScene(sceneId, worldPos) {
-  const center = sceneWorldCenter(sceneId) || worldPos;
-  flyToScene(center, true);
-  applySceneFocus(sceneId, center);
+  flyToScene(worldPos, true);
+  applySceneFocus(sceneId, worldPos);
 }
 
 // Un-focuses whatever's currently selected — the reverse of applySceneFocus:
@@ -1218,7 +1213,7 @@ function updateFullResLOD(cx, cy, cz) {
     // anything — without it, dwelling on exactly THAT scene first would look
     // like "already focused" and silently never fire.
     console.log(`[viewer] dwell-focus: ${nearestId} (${nearestDist.toFixed(1)}/${dwellRadiusFor(nearestId).toFixed(1)} units from centroid/radius)`);
-    applySceneFocus(nearestId, sceneWorldCenter(nearestId) || [cx, cy, cz]);
+    applySceneFocus(nearestId, worldPositions.get(nearestId) || [cx, cy, cz]);
   }
 
   // Arrival / exit monitoring for whatever's currently focused — see the
@@ -2466,7 +2461,7 @@ const REMOTE_MOVE_SPEED_MULT = 4.2;
 // felt too fast on the joystick specifically — scaling it down just for
 // remote-nav look, same pattern as the move multiplier above, so desktop
 // look/turn feel is untouched.
-const REMOTE_LOOK_SPEED_MULT = 0.38;
+const REMOTE_LOOK_SPEED_MULT = 0.55;
 
 // ── Remote navigation from mobile ─────────────────────────────────────────
 let _remoteNav = { move_x:0, move_z:0, move_y:0, turn_x:0, turn_y:0, gyro:false, gyro_yaw:null, gyro_pitch:null, ts:0 };
@@ -2496,10 +2491,7 @@ let _lastResetTs = 0;
           // canonical view a click would fly to), not zooming all the way
           // out to the whole world. Only fall back to the world overview
           // when nothing is focused yet.
-          // Re-centre on the focused memory's actual centre of mass (worldPos +
-          // centroid), not its raw map slot, so reset frames the memory properly
-          // — the same correct view a fresh selection flies to.
-          const focusedPos = (particleFocusActive && worldFocusedId) ? sceneWorldCenter(worldFocusedId) : null;
+          const focusedPos = (particleFocusActive && worldFocusedId) ? worldPositions.get(worldFocusedId) : null;
           if (!worldMode) resetCamera();
           else if (focusedPos) flyToScene(focusedPos, true);
           else flyToWorldOverview();
@@ -2642,12 +2634,7 @@ function flyLoop() {
       const forward = { x: -m[8], y: -m[9], z: -m[10] };
 
       const sprint = _keys.has("ShiftLeft") || _keys.has("ShiftRight");
-      // BASE_SPEED is tuned for single-scene mode (~10-30 unit scenes). The
-      // Memory Verse world is hundreds of units across, so at that pace WASD/QE
-      // barely move and feel broken. Scale movement way up in world mode so the
-      // keys actually get you somewhere; Shift still sprints on top of that.
-      const moveScale = worldMode ? 20 : 1;
-      const speed  = BASE_SPEED * moveScale * (sprint ? 4 : 1);
+      const speed  = BASE_SPEED * (sprint ? 3 : 1);
 
       let dx = 0, dy = 0, dz = 0;
       const add = (v, s) => { dx += v.x * s; dy += v.y * s; dz += v.z * s; };

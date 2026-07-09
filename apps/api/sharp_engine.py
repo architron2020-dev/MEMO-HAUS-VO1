@@ -110,12 +110,7 @@ class SharpEngine:
                 if dev == "cpu":
                     self._predictor.float().cpu()
                 with torch.inference_mode():
-                    # Run full fp32 on CUDA. fp16 autocast makes SHARP's
-                    # linalg.inv fail ("Low precision dtypes not supported. Got
-                    # Half"), which forced a silent CPU fallback. This box has
-                    # ample VRAM (96 GB), so fp32 is free and keeps inference on
-                    # the GPU.
-                    with torch.amp.autocast(device_type="cuda", enabled=False):
+                    with torch.amp.autocast(device_type="cuda", enabled=(dev == "cuda")):
                         return _predict_image(
                             self._predictor, image, f_px, torch.device(dev)
                         )

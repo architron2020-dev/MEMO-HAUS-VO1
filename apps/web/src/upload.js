@@ -824,35 +824,6 @@ function encodeWav(audioBuffer) {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
-// Shrink big phone photos before upload so they fly over mobile data. SHARP
-// works from a modest input resolution internally, so capping the long edge
-// barely affects splat quality while turning a 5-11 MB HEIC/JPEG into a few
-// hundred KB — the difference between a slow crawl and an instant upload on a
-// cellular connection. Falls back to the original file if the browser can't
-// decode it (some HEIC) or if it's already small / wouldn't shrink.
-async function downscaleForUpload(file, maxDim = 2048, quality = 0.85) {
-  try {
-    if (!file || !file.type || !file.type.startsWith("image/")) return file;
-    if (file.size < 900 * 1024) return file; // already small — leave it
-    const bitmap = await createImageBitmap(file);
-    const longEdge = Math.max(bitmap.width, bitmap.height);
-    const scale = Math.min(1, maxDim / longEdge);
-    if (scale >= 1) { bitmap.close?.(); return file; } // not larger than the cap
-    const w = Math.round(bitmap.width * scale);
-    const h = Math.round(bitmap.height * scale);
-    const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
-    canvas.getContext("2d").drawImage(bitmap, 0, 0, w, h);
-    bitmap.close?.();
-    const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", quality));
-    if (!blob || blob.size >= file.size) return file; // no gain — keep original
-    const base = (file.name || "photo").replace(/\.[^.]+$/, "");
-    return new File([blob], base + ".jpg", { type: "image/jpeg" });
-  } catch {
-    return file; // decode failed (e.g. HEIC on a non-Safari browser) — send original
-  }
-}
-
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedFiles.length) return;
@@ -879,11 +850,8 @@ form.addEventListener("submit", async (event) => {
       }
       startGenProgress();
 
-      // Compress the photo client-side first so it uploads fast on mobile data.
-      const uploadFile = await downscaleForUpload(file);
-
       const formData = new FormData();
-      formData.append("image", uploadFile);
+      formData.append("image", file);
       formData.append("name", nameInput.value);
       formData.append("author", authorInput.value);
       formData.append("year", effectiveYear);
@@ -913,23 +881,10 @@ form.addEventListener("submit", async (event) => {
       await new Promise(r => setTimeout(r, 300)); // let the 100% register visually
     }
 
-    // Tell the viewer to fly to and highlight the freshly uploaded memory (the
-    // last one, for a batch), so the person immediately sees where their memory
-    // landed in the world — its scene text/story overlay shows on arrival.
-    if (lastScene?.id) {
-      try {
-        await fetch("/api/select-scene", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scene_id: lastScene.id }),
-        });
-      } catch { /* non-fatal — the memory is still live, just not auto-focused */ }
-    }
-
     setStatus(
       total > 1
-        ? `Done! ${uploaded} photos of "${lastScene.name}" are now live — showing the latest in the viewer.`
-        : `Done! "${lastScene.name}" is now live — the viewer just flew to it so you can see where it landed.`,
+        ? `Done! ${uploaded} photos of "${lastScene.name}" are now live — the memory brain will check them for matches.`
+        : `Done! "${lastScene.name}" is now live in the viewer. You can share another photo.`,
       "success",
     );
     resetForm();
@@ -2050,12 +2005,8 @@ async function toggleGyro(btnEl) {
   const gyroBtnEl    = document.getElementById("gyro-btn");
   const navResetBtnEl = document.getElementById("nav-reset-btn");
 
-  // Quadratic response curve: keeps sign but eases small stick deflections so a
-  // slightly-off thumb barely nudges the camera, while a full push still reaches
-  // top speed. Makes the touch controls far less twitchy without feeling sluggish.
-  const expo = (v) => v * Math.abs(v);
-  if (moveStickEl) initJoystick(moveStickEl, moveKnobEl, (nx, ny) => { _navState.move_x = expo(nx); _navState.move_z = -expo(ny); });
-  if (lookStickEl) initJoystick(lookStickEl, lookKnobEl, (nx, ny) => { _navState.turn_x = expo(nx); _navState.turn_y = expo(ny); });
+  if (moveStickEl) initJoystick(moveStickEl, moveKnobEl, (nx, ny) => { _navState.move_x = nx; _navState.move_z = -ny; });
+  if (lookStickEl) initJoystick(lookStickEl, lookKnobEl, (nx, ny) => { _navState.turn_x = nx; _navState.turn_y = ny; });
   if (altTrackEl)  initAltSlider(altTrackEl, altThumbEl);
   if (gyroBtnEl)   gyroBtnEl.addEventListener("click", () => toggleGyro(gyroBtnEl));
 
