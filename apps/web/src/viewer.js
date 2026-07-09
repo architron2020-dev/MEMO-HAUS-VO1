@@ -2461,7 +2461,7 @@ const REMOTE_MOVE_SPEED_MULT = 4.2;
 // felt too fast on the joystick specifically — scaling it down just for
 // remote-nav look, same pattern as the move multiplier above, so desktop
 // look/turn feel is untouched.
-const REMOTE_LOOK_SPEED_MULT = 0.55;
+const REMOTE_LOOK_SPEED_MULT = 0.38;
 
 // ── Remote navigation from mobile ─────────────────────────────────────────
 let _remoteNav = { move_x:0, move_z:0, move_y:0, turn_x:0, turn_y:0, gyro:false, gyro_yaw:null, gyro_pitch:null, ts:0 };
@@ -2634,7 +2634,12 @@ function flyLoop() {
       const forward = { x: -m[8], y: -m[9], z: -m[10] };
 
       const sprint = _keys.has("ShiftLeft") || _keys.has("ShiftRight");
-      const speed  = BASE_SPEED * (sprint ? 3 : 1);
+      // BASE_SPEED is tuned for single-scene mode (~10-30 unit scenes). The
+      // Memory Verse world is hundreds of units across, so at that pace WASD/QE
+      // barely move and feel broken. Scale movement way up in world mode so the
+      // keys actually get you somewhere; Shift still sprints on top of that.
+      const moveScale = worldMode ? 20 : 1;
+      const speed  = BASE_SPEED * moveScale * (sprint ? 4 : 1);
 
       let dx = 0, dy = 0, dz = 0;
       const add = (v, s) => { dx += v.x * s; dy += v.y * s; dz += v.z * s; };
