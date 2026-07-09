@@ -16,7 +16,14 @@ const httpsConfig =
     ? { cert: readFileSync(certPath), key: readFileSync(keyPath) }
     : undefined;
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // Production build is served from GitHub Pages at
+  // https://architron2020-dev.github.io/MEMO-HAUS-VO1/, so every built asset URL
+  // must be prefixed with the repo path. The dev server stays at root ("/") so
+  // the documented local URLs (localhost:5173/, /viewer.html) and the LAN QR
+  // workflow keep working. Override the build base with MEMO_WEB_BASE (e.g. "/"
+  // for a root domain).
+  base: command === "build" ? process.env.MEMO_WEB_BASE || "/MEMO-HAUS-VO1/" : "/",
   server: {
     port: 5173,
     host: true, // expose on the LAN so phones (via QR code) can reach the upload page
@@ -37,4 +44,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

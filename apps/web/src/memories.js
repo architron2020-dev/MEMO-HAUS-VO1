@@ -1,3 +1,5 @@
+import "./api.js"; // installs the backend-origin fetch shim before anything fetches
+import { apiUrl } from "./api.js";
 import "./memories.css";
 import { initThemeToggle, carryAccentToViewerLinks, initCursor, initTapSounds, initFullscreenToggle, initFullscreenPersistence } from "./theme.js";
 
@@ -89,7 +91,7 @@ function buildMemoryCard(memory) {
   card.className = "memory-card";
 
   const frame = memory.image_url
-    ? `<div class="memory-card-frame" style="background-image:url('${memory.image_url}')"></div>`
+    ? `<div class="memory-card-frame" style="background-image:url('${apiUrl(memory.image_url)}')"></div>`
     : `<div class="memory-card-frame placeholder">3D</div>`;
 
   card.innerHTML = `

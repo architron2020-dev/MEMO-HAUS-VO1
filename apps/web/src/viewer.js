@@ -1,3 +1,5 @@
+import "./api.js"; // installs the backend-origin fetch shim before anything fetches
+import { apiUrl, CROSS_ORIGIN } from "./api.js";
 import "./viewer.css";
 import * as THREE from "three";
 import { SparkRenderer, SplatMesh, SplatFileType } from "@sparkjsdev/spark";
@@ -1300,7 +1302,11 @@ async function extractSceneColor(imageUrl) {
       }
     };
     img.onerror = () => resolve([100, 200, 255]);
-    img.src = imageUrl;
+    // Cross-origin when the backend is on another host; the backend sends
+    // `Access-Control-Allow-Origin: *`, so the canvas stays un-tainted and
+    // getImageData() below keeps working for colour extraction.
+    if (CROSS_ORIGIN) img.crossOrigin = CROSS_ORIGIN;
+    img.src = apiUrl(imageUrl);
   });
 }
 

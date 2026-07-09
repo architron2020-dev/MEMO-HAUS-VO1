@@ -1,10 +1,10 @@
-name: Deploy presentation to GitHub Pages
+name: Deploy Memo-Haus app to GitHub Pages
 
 on:
   push:
     branches: ["main"]
     paths:
-      - "apps/web/public/presentation/**"
+      - "apps/web/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -18,16 +18,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Build the web app
+        run: npm run build
+        env:
+          # Base path for the project Pages site. Change if you move to a root
+          # domain (set to "/").
+          MEMO_WEB_BASE: /MEMO-HAUS-VO1/
+          # Optional: bake the backend origin at build time. Leaving this unset
+          # falls back to public/runtime-config.js (window.MEMO_API_BASE), which
+          # you can edit on the deployed site without rebuilding.
+          VITE_MEMO_API_BASE: ${{ vars.MEMO_API_BASE }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
   deploy:
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Upload presentation as Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: apps/web/public/presentation
       - id: deployment
         uses: actions/deploy-pages@v4

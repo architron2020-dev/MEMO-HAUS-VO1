@@ -1,3 +1,5 @@
+import "./api.js"; // installs the backend-origin fetch shim before anything fetches
+import { apiUrl } from "./api.js";
 import "./upload.css";
 import { initThemeToggle, carryAccentToViewerLinks, initCursor, initSplash, initFullscreenToggle, initFullscreenPersistence, initTapSounds } from "./theme.js";
 
@@ -527,7 +529,7 @@ async function openCropUI(sourceUrl, title, rawFile = null) {
     console.error(err);
     if (rawFile) {
       setSelectedAudio(rawFile);
-      audioPreviewPlayer.src = sourceUrl;
+      audioPreviewPlayer.src = apiUrl(sourceUrl);
       showAudioPanel(audioPreviewEl);
       setStatus(
         `Could not show a waveform for "${title}" (unsupported for cropping), but it's attached as-is — uncropped.`,
@@ -540,7 +542,7 @@ async function openCropUI(sourceUrl, title, rawFile = null) {
     return;
   }
 
-  cropPlayer.src = sourceUrl;
+  cropPlayer.src = apiUrl(sourceUrl);
   cropDuration = decodedBuffer.duration;
   cropStartSec = 0;
   cropEndSec = Math.min(cropDuration, MAX_AUDIO_SECONDS);
