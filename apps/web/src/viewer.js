@@ -1057,9 +1057,14 @@ function applySceneFocus(sceneId, worldPos) {
 
 // Explicit selection (click, mobile pick, slideshow advance): flies the
 // camera to the memory's canonical front view, then applies focus.
+// Frame the scene's actual centre of mass (worldPos + centroid), NOT the raw
+// map slot — a splat whose mass sits off its origin would otherwise put the
+// camera looking at empty space beside/below it ("misplaced camera"). The
+// centre also anchors the spatial audio so it comes from the visible memory.
 function focusWorldScene(sceneId, worldPos) {
-  flyToScene(worldPos, true);
-  applySceneFocus(sceneId, worldPos);
+  const center = sceneWorldCenter(sceneId) || worldPos;
+  flyToScene(center, true);
+  applySceneFocus(sceneId, center);
 }
 
 // Un-focuses whatever's currently selected — the reverse of applySceneFocus:
@@ -1213,7 +1218,7 @@ function updateFullResLOD(cx, cy, cz) {
     // anything — without it, dwelling on exactly THAT scene first would look
     // like "already focused" and silently never fire.
     console.log(`[viewer] dwell-focus: ${nearestId} (${nearestDist.toFixed(1)}/${dwellRadiusFor(nearestId).toFixed(1)} units from centroid/radius)`);
-    applySceneFocus(nearestId, worldPositions.get(nearestId) || [cx, cy, cz]);
+    applySceneFocus(nearestId, sceneWorldCenter(nearestId) || [cx, cy, cz]);
   }
 
   // Arrival / exit monitoring for whatever's currently focused — see the
@@ -2491,7 +2496,10 @@ let _lastResetTs = 0;
           // canonical view a click would fly to), not zooming all the way
           // out to the whole world. Only fall back to the world overview
           // when nothing is focused yet.
-          const focusedPos = (particleFocusActive && worldFocusedId) ? worldPositions.get(worldFocusedId) : null;
+          // Re-centre on the focused memory's actual centre of mass (worldPos +
+          // centroid), not its raw map slot, so reset frames the memory properly
+          // — the same correct view a fresh selection flies to.
+          const focusedPos = (particleFocusActive && worldFocusedId) ? sceneWorldCenter(worldFocusedId) : null;
           if (!worldMode) resetCamera();
           else if (focusedPos) flyToScene(focusedPos, true);
           else flyToWorldOverview();
