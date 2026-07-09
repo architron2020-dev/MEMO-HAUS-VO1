@@ -17,13 +17,12 @@ const httpsConfig =
     : undefined;
 
 export default defineConfig(({ command }) => ({
-  // Production build is served from GitHub Pages at
-  // https://architron2020-dev.github.io/MEMO-HAUS-VO1/, so every built asset URL
-  // must be prefixed with the repo path. The dev server stays at root ("/") so
-  // the documented local URLs (localhost:5173/, /viewer.html) and the LAN QR
-  // workflow keep working. Override the build base with MEMO_WEB_BASE (e.g. "/"
-  // for a root domain).
-  base: command === "build" ? process.env.MEMO_WEB_BASE || "/MEMO-HAUS-VO1/" : "/",
+  // Production target is ki-pc.architektur.uni-weimar.de, which serves the app
+  // at its own root (Caddy static root + /api reverse-proxied to the backend),
+  // so the build is root-based ("/") and same-origin — plain relative /api calls
+  // just work. Override with MEMO_WEB_BASE for a sub-path host (e.g.
+  // "/MEMO-HAUS-VO1/" for GitHub Pages). Dev server always stays at root.
+  base: command === "build" ? process.env.MEMO_WEB_BASE || "/" : "/",
   server: {
     port: 5173,
     host: true, // expose on the LAN so phones (via QR code) can reach the upload page
