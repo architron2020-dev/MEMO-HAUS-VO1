@@ -233,13 +233,6 @@ const sceneExtents   = new Map();
 // dragged badly off by a handful of stray far-flung gaussians; the mean is
 // only pulled proportionally to how many points are actually out there.
 const sceneCentroids = new Map();
-// scene id → [x, y, z], a ROBUST centre of the visible bulk (midpoint of the
-// 5th–95th percentile per axis), in the scene's own local space. Unlike the
-// mean above, this ignores stray far-flung "floater" gaussians entirely, so it
-// marks where the memory actually LOOKS like it is. The camera frames this (see
-// sceneWorldCenter) so focusing a memory never lands on empty space between the
-// dense splat and its outliers.
-const sceneRobustCenters = new Map();
 
 // ── Ground-plane placement, shared with the main-page map ─────────────────
 // A memory's spot lives on the server as (x_pct, y_pct) in a unit square — the
@@ -546,14 +539,6 @@ function recordExtentFromPoints(id, data) {
     ySpan: Math.max(4, ys[hi] - ys[lo]),
     zSpan: Math.max(4, zs[hi] - zs[lo]),
   });
-  // Robust visible centre: midpoint of the same 5–95 percentile band, so stray
-  // outliers don't drag it (the way they drag the mean). This is what the
-  // camera should look at when focusing the memory.
-  sceneRobustCenters.set(id, [
-    (xs[lo] + xs[hi]) / 2,
-    (ys[lo] + ys[hi]) / 2,
-    (zs[lo] + zs[hi]) / 2,
-  ]);
 }
 
 // World-space centre of mass for a scene: its map placement (worldPositions)
@@ -568,19 +553,6 @@ function sceneWorldCenter(id) {
   if (!pos) return null;
   const c = sceneCentroids.get(id);
   if (!c) return pos;
-  // placeSceneObject() anchors the MEAN at pos (obj.position = pos + c*(1-scale),
-  // uniform scale s), so a local point p lands at pos + c + s*(p - c). To look at
-  // the visible bulk we want p = the robust centre r, giving pos + c + s*(r - c).
-  // Falling back to the mean (r absent) keeps the old behaviour.
-  const r = sceneRobustCenters.get(id);
-  const s = sceneScales.get(id) ?? 1;
-  if (r) {
-    return [
-      pos[0] + c[0] + s * (r[0] - c[0]),
-      pos[1] + c[1] + s * (r[1] - c[1]),
-      pos[2] + c[2] + s * (r[2] - c[2]),
-    ];
-  }
   return [pos[0] + c[0], pos[1] + c[1], pos[2] + c[2]];
 }
 
@@ -1085,14 +1057,9 @@ function applySceneFocus(sceneId, worldPos) {
 
 // Explicit selection (click, mobile pick, slideshow advance): flies the
 // camera to the memory's canonical front view, then applies focus.
-// Frame the scene's actual centre of mass (worldPos + centroid), NOT the raw
-// map slot — a splat whose mass sits off its origin would otherwise put the
-// camera looking at empty space beside/below it ("misplaced camera"). The
-// centre also anchors the spatial audio so it comes from the visible memory.
 function focusWorldScene(sceneId, worldPos) {
-  const center = sceneWorldCenter(sceneId) || worldPos;
-  flyToScene(center, true);
-  applySceneFocus(sceneId, center);
+  flyToScene(worldPos, true);
+  applySceneFocus(sceneId, worldPos);
 }
 
 // Un-focuses whatever's currently selected — the reverse of applySceneFocus:
@@ -1246,7 +1213,7 @@ function updateFullResLOD(cx, cy, cz) {
     // anything — without it, dwelling on exactly THAT scene first would look
     // like "already focused" and silently never fire.
     console.log(`[viewer] dwell-focus: ${nearestId} (${nearestDist.toFixed(1)}/${dwellRadiusFor(nearestId).toFixed(1)} units from centroid/radius)`);
-    applySceneFocus(nearestId, sceneWorldCenter(nearestId) || [cx, cy, cz]);
+    applySceneFocus(nearestId, worldPositions.get(nearestId) || [cx, cy, cz]);
   }
 
   // Arrival / exit monitoring for whatever's currently focused — see the
@@ -2524,10 +2491,7 @@ let _lastResetTs = 0;
           // canonical view a click would fly to), not zooming all the way
           // out to the whole world. Only fall back to the world overview
           // when nothing is focused yet.
-          // Re-centre on the focused memory's actual centre of mass (worldPos +
-          // centroid), not its raw map slot, so reset frames the memory properly
-          // — the same correct view a fresh selection flies to.
-          const focusedPos = (particleFocusActive && worldFocusedId) ? sceneWorldCenter(worldFocusedId) : null;
+          const focusedPos = (particleFocusActive && worldFocusedId) ? worldPositions.get(worldFocusedId) : null;
           if (!worldMode) resetCamera();
           else if (focusedPos) flyToScene(focusedPos, true);
           else flyToWorldOverview();
