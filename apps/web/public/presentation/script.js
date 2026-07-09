@@ -26,7 +26,20 @@ const animObserver = new IntersectionObserver(
   },
   { root: deck, threshold: 0.3 },
 );
-document.querySelectorAll(".pres-anim").forEach((el) => animObserver.observe(el));
+const _animEls = document.querySelectorAll(".pres-anim");
+_animEls.forEach((el) => animObserver.observe(el));
+
+// Safety net: some mobile browsers are inconsistent about firing
+// IntersectionObserver callbacks reliably inside a custom scroll container
+// (root: deck) — when it doesn't fire, .pres-anim elements are stuck at
+// opacity:0 forever (see the base rule above), which is exactly what made
+// the site/pavilion drawings and their captions invisible on mobile even
+// though the images themselves loaded fine. This doesn't replace the
+// observer — it just guarantees nothing stays permanently invisible if the
+// observer never reports an element as intersecting.
+setTimeout(() => {
+  _animEls.forEach((el) => el.classList.add("in-view"));
+}, 2500);
 
 // ── Slide dots — one per slide, click to jump, highlight whichever is in view ──
 
@@ -76,7 +89,7 @@ document.addEventListener("keydown", (e) => {
 // ── Fullscreen toggle ────────────────────────────────────────────────────────
 
 const fullscreenBtn = document.getElementById("fullscreen-btn");
-fullscreenBtn.addEventListener("click", () => {
+fullscreenBtn?.addEventListener("click", () => {
   if (document.fullscreenElement) {
     document.exitFullscreen();
   } else {
@@ -109,15 +122,33 @@ function initAutoSlider(containerId, slideClass, dotClass, intervalMs) {
   if (!container) return;
   const slides = Array.from(container.querySelectorAll(`.${slideClass}`));
   const dots = Array.from(container.querySelectorAll(`.${dotClass}`));
-  let index = 0;
+  if (!slides.length) return;
+  let index = Math.max(0, slides.findIndex((s) => s.classList.contains("active")));
+  let timer = null;
 
-  setInterval(() => {
+  function show(i) {
     slides[index].classList.remove("active");
     dots[index]?.classList.remove("active");
-    index = (index + 1) % slides.length;
+    index = ((i % slides.length) + slides.length) % slides.length;
     slides[index].classList.add("active");
     dots[index]?.classList.add("active");
-  }, intervalMs);
+  }
+
+  function restart() {
+    if (timer) clearInterval(timer);
+    timer = setInterval(() => show(index + 1), intervalMs);
+  }
+
+  restart();
+
+  // Tap/click anywhere on the slide to jump to the next one; tapping a
+  // specific dot jumps straight to that slide. Either way resets the
+  // auto-advance timer so it doesn't immediately flip again right after.
+  container.addEventListener("click", (e) => {
+    const dotIdx = dots.indexOf(e.target);
+    show(dotIdx !== -1 ? dotIdx : index + 1);
+    restart();
+  });
 }
 
 initAutoSlider("mockup-slider", "mockup-slide", "mockup-dot", 4500);

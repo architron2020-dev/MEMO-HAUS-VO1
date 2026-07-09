@@ -73,10 +73,15 @@
 
     <!-- Top tab bar -->
     <nav class="tab-bar">
-      <button class="tab-btn active" data-tab="preserve">preserve</button>
-      <button class="tab-btn" data-tab="explore">explore</button>
-      <a href="/presentation/index.html" target="_blank" rel="noopener" class="tab-btn">about</a>
+      <button class="tab-btn active" data-tab="preserve">Preserve</button>
+      <button class="tab-btn" data-tab="explore">Explore</button>
+      <a href="/presentation/index.html" target="_blank" rel="noopener" class="tab-btn">About</a>
     </nav>
+    <button id="fullscreen-toggle-btn" class="fullscreen-toggle-btn" type="button" aria-label="Enter fullscreen" title="Toggle fullscreen">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/>
+      </svg>
+    </button>
 
     <!-- Tab panels -->
     <div class="tab-panels">
@@ -106,23 +111,24 @@
         <form id="upload-form" class="preserve-form" autocomplete="off">
 
           <div class="ghost-field" id="year-field">
-            <input id="year-input" class="ghost-input" type="text" placeholder="when" maxlength="10" inputmode="numeric" />
+            <input id="year-input" class="ghost-input" type="text" placeholder="When" maxlength="10" inputmode="numeric" />
             <i class="field-dot" id="dot-year"></i>
           </div>
 
           <div class="ghost-field">
-            <input id="name-input" class="ghost-input" type="text" placeholder="name this memory" maxlength="80" />
+            <input id="name-input" class="ghost-input" type="text" placeholder="Name this memory" maxlength="80" />
             <i class="field-dot" id="dot-name"></i>
           </div>
 
           <div class="ghost-field">
-            <input id="author-input" class="ghost-input" type="text" placeholder="your name" maxlength="60" />
+            <input id="author-input" class="ghost-input" type="text" placeholder="Your name" maxlength="60" />
             <i class="field-dot" id="dot-author"></i>
           </div>
 
           <div class="ghost-field">
-            <textarea id="story-input" class="ghost-input ghost-textarea" placeholder="what do you remember…" maxlength="280" rows="2"></textarea>
+            <textarea id="story-input" class="ghost-input ghost-textarea" placeholder="What do you remember…" maxlength="280" rows="2"></textarea>
             <i class="field-dot" id="dot-story"></i>
+            <span class="char-counter" id="char-counter">0 / 280</span>
           </div>
 
           <!-- Audio -->
@@ -150,7 +156,7 @@
 
             <div id="music-browser" class="audio-panel hidden">
               <div class="music-search-row">
-                <input type="text" id="music-search-input" placeholder="search music…" />
+                <input type="text" id="music-search-input" placeholder="Search music…" />
                 <button type="button" id="music-search-btn">Search</button>
               </div>
               <p class="music-note">Free, openly-licensed tracks — mainstream songs won't appear.</p>
@@ -184,7 +190,7 @@
           <p id="status" class="status ghost-status" role="status"></p>
 
           <!-- Hidden submit — upload.js controls disabled state here -->
-          <button id="upload-button" type="submit" class="visually-hidden" disabled>preserve</button>
+          <button id="upload-button" type="submit" class="visually-hidden" disabled>Preserve</button>
         </form>
       </div>
 
@@ -208,6 +214,7 @@
           <div class="explore-timeline" id="explore-timeline" style="display:none">
             <span class="tl-yr" id="tl-yr-from">—</span>
             <div class="tl-track" id="tl-track">
+              <div class="tl-hist" id="tl-hist"></div>
               <div class="tl-fill" id="tl-fill"></div>
               <input type="range" class="tl-slider" id="tl-slider-from" />
               <input type="range" class="tl-slider" id="tl-slider-to" />
@@ -281,12 +288,25 @@
       <p class="gen-text"><span id="gen-text-content">building your memory</span></p>
     </div>
 
-
+    <!-- Confirm dialog (fixed, full-screen) — native window.confirm()/alert()
+         are unreliable inside a fullscreen/kiosk view (some browsers block
+         or silently auto-dismiss them), so destructive actions like
+         deleting a memory use this instead. See showConfirm()/showAlert()
+         in upload.js. -->
+    <div id="confirm-overlay" class="confirm-overlay hidden">
+      <div class="confirm-box">
+        <p class="confirm-message" id="confirm-message"></p>
+        <div class="confirm-actions" id="confirm-actions">
+          <button type="button" class="confirm-btn confirm-btn-cancel" id="confirm-cancel-btn">cancel</button>
+          <button type="button" class="confirm-btn confirm-btn-danger" id="confirm-ok-btn">delete</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Bottom bar -->
     <div class="bottom-bar" id="bottom-bar">
       <!-- Visible preserve action (proxied to hidden #upload-button inside the form) -->
-      <button id="preserve-action-btn" type="button" class="action-btn" disabled>preserve</button>
+      <button id="preserve-action-btn" type="button" class="action-btn" disabled><span>Preserve</span></button>
     </div>
 
     <script>

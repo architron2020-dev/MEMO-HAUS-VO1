@@ -120,10 +120,13 @@ class Storage:
         return Scene(**records[-1]) if records else None
 
     def delete_scene(self, scene_id: str) -> Scene | None:
-        """Remove a scene's record and its files (source image + splat PLY).
-        Returns the deleted Scene, or None if no such scene exists. Does NOT
-        touch stitched files or the memory brain index — that's the caller's
-        job (main.py calls brain.delete_scene_references after this)."""
+        """Remove a scene's record and every file that belongs to it: the
+        original uploaded photo (Memo-album), the full-resolution splat PLY
+        plus any cached decimated variants of it (see proxy.py's
+        get_or_build_lite_ply — those sit alongside the original as
+        "<stem>.k##.ply" and aren't tracked anywhere else), and its audio
+        file, if any. Returns the deleted Scene, or None if no such scene
+        exists."""
         with self._lock:
             records = self._read_index()
             match = next((r for r in records if r["id"] == scene_id), None)
@@ -133,10 +136,50 @@ class Storage:
 
         scene = Scene(**match)
         (self.uploads_dir / scene.image_file).unlink(missing_ok=True)
-        (self.splats_dir / scene.ply_file).unlink(missing_ok=True)
+        ply_path = self.splats_dir / scene.ply_file
+        ply_path.unlink(missing_ok=True)
+        for lite in self.splats_dir.glob(f"{ply_path.stem}.k*.ply"):
+            lite.unlink(missing_ok=True)
         if scene.audio_file:
             (self.audio_dir / scene.audio_file).unlink(missing_ok=True)
         return scene
+
+    def prune_orphaned_files(self) -> dict[str, list[str]]:
+        """One-time (and safe to re-run) sweep: delete any file sitting in
+        Memo-album/Memo-splatted/Memo-audio that doesn't belong to a scene
+        currently in the index. Covers files left behind by deletions that
+        happened before delete_scene() cleaned up decimated PLY variants
+        too, or by a server process that was still running the old code
+        at the moment a delete request came in. Returns the relative
+        filenames actually removed, grouped by directory."""
+        records = self._read_index()
+        live_images = {r["image_file"] for r in records if r.get("image_file")}
+        live_plys = {r["ply_file"] for r in records if r.get("ply_file")}
+        live_ply_stems = {Path(p).stem for p in live_plys}
+        live_audio = {r["audio_file"] for r in records if r.get("audio_file")}
+
+        removed: dict[str, list[str]] = {"images": [], "splats": [], "audio": []}
+        for f in self.uploads_dir.iterdir():
+            if f.is_file() and f.name not in live_images:
+                f.unlink(missing_ok=True)
+                removed["images"].append(f.name)
+        for f in self.splats_dir.iterdir():
+            if not f.is_file():
+                continue
+            # A live decimated variant ("<stem>.k40.ply") has a stem of
+            # "<id>.k40" — strip that suffix back to "<id>" before checking
+            # against live_ply_stems, since only the ORIGINAL ply_file is
+            # tracked in the index.
+            stem = f.stem
+            base_stem = stem.split(".k")[0] if ".k" in stem else stem
+            if f.name not in live_plys and base_stem not in live_ply_stems:
+                f.unlink(missing_ok=True)
+                removed["splats"].append(f.name)
+        for f in self.audio_dir.iterdir():
+            if f.is_file() and f.name not in live_audio:
+                f.unlink(missing_ok=True)
+                removed["audio"].append(f.name)
+        return removed
 
 
 def now() -> float:

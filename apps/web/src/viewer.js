@@ -6,6 +6,7 @@ const viewerEl      = document.getElementById("viewer");
 const placeholderEl   = document.getElementById("placeholder");
 const splashStatusEl  = document.getElementById("splash-status");
 const splashCountEl   = document.getElementById("splash-count");
+const splashPercentEl = document.getElementById("splash-percent");
 const overlayEl     = document.getElementById("transition-overlay");
 const hudEl         = document.getElementById("scene-hud");
 const captionNameEl = document.getElementById("caption-name");
@@ -731,6 +732,33 @@ function clearPointCloudProxies() {
     p.material.dispose();
   }
   pointCloudProxies.clear();
+}
+
+function removePointCloudProxy(sceneId) {
+  const p = pointCloudProxies.get(sceneId);
+  if (!p) return;
+  viewer?.threeScene?.remove(p);
+  p.geometry.dispose();
+  p.material.dispose();
+  pointCloudProxies.delete(sceneId);
+}
+
+// A memory was deleted server-side (see poll() below) — tear down
+// everything the viewer built for it: the full-res splat if one was
+// loaded, its point-cloud proxy, and every bit of bookkeeping that would
+// otherwise keep referencing a scene id that no longer exists.
+async function removeSceneFromWorld(sceneId) {
+  if (worldFocusedId === sceneId) clearSceneFocus();
+  if (splatMeshes.has(sceneId)) await splatUnload(sceneId);
+  removePointCloudProxy(sceneId);
+  worldPositions.delete(sceneId);
+  sceneScales.delete(sceneId);
+  const loadedIdx = worldLoadedOrder.indexOf(sceneId);
+  if (loadedIdx !== -1) worldLoadedOrder.splice(loadedIdx, 1);
+  worldScenes = worldScenes.filter(s => s.id !== sceneId);
+  scenes = scenes.filter(s => s.id !== sceneId);
+  refreshBoundaryBoxes();
+  console.log(`[viewer] removed deleted scene ${sceneId} from world`);
 }
 
 // ── Debug: memory boundary boxes ─────────────────────────────────────────
@@ -1958,8 +1986,9 @@ async function buildWorldMode(sceneIds) {
     // Full quality is loaded on demand per-scene by updateFullResLOD() as
     // the visitor actually approaches, and by focusWorldScene() when a
     // memory is explicitly selected.
-    if (splashStatusEl) splashStatusEl.textContent = "entering the memory verse…";
-    if (splashCountEl)  splashCountEl.textContent  = "";
+    if (splashStatusEl)  splashStatusEl.textContent  = "entering the memory verse…";
+    if (splashCountEl)   splashCountEl.textContent   = "";
+    if (splashPercentEl) splashPercentEl.textContent = "0%";
 
     const total = targetScenes.length;
     console.log(`[viewer] building ${total} point-cloud proxy(ies), ${PROXY_BUILD_CONCURRENCY} at a time...`);
@@ -1974,6 +2003,7 @@ async function buildWorldMode(sceneIds) {
       }
       doneCount++;
       if (splashCountEl) splashCountEl.textContent = `${doneCount} / ${total}`;
+      if (splashPercentEl) splashPercentEl.textContent = `${Math.round((doneCount / total) * 100)}%`;
     });
     console.log(`[viewer] proxies ready: ${worldLoadedOrder.length}/${total} in ${(performance.now() - t0).toFixed(0)}ms`);
 
@@ -2133,6 +2163,17 @@ async function poll() {
 
     const all = await scenesRes.json();
     console.log(`[viewer] poll: /api/scenes returned ${all.length} total scene(s)`);
+
+    // Scenes deleted (mobile app's delete-a-memory) since the last poll —
+    // torn down here rather than waiting for a page refresh, since nothing
+    // else ever notices a scene disappearing from /api/scenes otherwise.
+    const stillPresent = new Set(all.map(s => s.id));
+    const removedIds = scenes.filter(s => !stillPresent.has(s.id)).map(s => s.id);
+    if (removedIds.length) {
+      console.log(`[viewer] poll: ${removedIds.length} scene(s) deleted server-side:`, removedIds);
+      for (const id of removedIds) await removeSceneFromWorld(id);
+    }
+
     if (!all.length) return;
     const known = new Set(scenes.map(s => s.id));
     const fresh = all.filter(s => !known.has(s.id));
@@ -2640,7 +2681,7 @@ flyLoop();
 poll();
 const _pollId      = setInterval(poll, POLL_INTERVAL);
 const _statusId    = setInterval(pollStatus, STATUS_INTERVAL);
-const _selectionId = setInterval(pollSelection, 2_000);  // snappier than POLL_INTERVAL — this is a direct user action
+const _selectionId = setInterval(pollSelection, 400);  // direct user action — keep this snappy so the map's optimistic marker jump isn't waiting on a stale selection for seconds
 const _worldSelectionId = setInterval(pollWorldSelection, 2_000);
 const _posSyncId   = setInterval(syncServerPositions, 600); // live map-drag → viewer moves
 

@@ -75,10 +75,11 @@
           </g>
         </svg>
 
-        <!-- Spinner ring — same CSS border-spinner as the app's preserve screen -->
+        <!-- Spinner ring — same ring+dot loader as the app's preserve screen -->
         <div class="splash-spinner-wrap">
-          <div class="splash-spinner"></div>
+          <div class="splash-spinner"><span class="splash-spinner-dot"></span></div>
         </div>
+        <p class="splash-percent" id="splash-percent"></p>
 
         <!-- Status text — updated by JS as scenes load -->
         <p class="placeholder-sub" id="splash-status">entering the memory verse…</p>

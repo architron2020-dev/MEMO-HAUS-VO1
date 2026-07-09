@@ -898,7 +898,7 @@ form.addEventListener("submit", async (event) => {
 
 function setBusy(busy) {
   uploadButton.disabled = busy || selectedFiles.length === 0;
-  uploadButton.textContent = busy ? "building…" : "preserve →";
+  uploadButton.textContent = busy ? "Building…" : "Preserve →";
   generatingOverlay.classList.toggle("hidden", !busy);
   if (busy) {
     startGenPhrases();
@@ -927,6 +927,50 @@ function resetForm() {
   charCounter.classList.remove("near-limit");
 }
 
+// ── Confirm dialog ─────────────────────────────────────
+// A stand-in for window.confirm()/alert(): those are unreliable inside a
+// fullscreen/kiosk view (installed-PWA and some fullscreen contexts block
+// or silently auto-dismiss native dialogs entirely, which made the delete
+// confirmation silently resolve to "cancelled" with no visible sign why).
+const confirmOverlayEl = document.getElementById("confirm-overlay");
+const confirmMessageEl = document.getElementById("confirm-message");
+const confirmOkBtn     = document.getElementById("confirm-ok-btn");
+const confirmCancelBtn = document.getElementById("confirm-cancel-btn");
+let _confirmResolve = null;
+
+function showConfirm(message, okLabel = "delete") {
+  return new Promise(resolve => {
+    if (!confirmOverlayEl) { resolve(window.confirm(message)); return; }
+    _confirmResolve = resolve;
+    confirmMessageEl.textContent = message;
+    confirmOkBtn.textContent = okLabel;
+    confirmCancelBtn.style.display = "";
+    confirmOverlayEl.classList.remove("hidden");
+  });
+}
+
+function showAlert(message) {
+  return new Promise(resolve => {
+    if (!confirmOverlayEl) { window.alert(message); resolve(); return; }
+    _confirmResolve = () => resolve();
+    confirmMessageEl.textContent = message;
+    confirmOkBtn.textContent = "ok";
+    confirmCancelBtn.style.display = "none";
+    confirmOverlayEl.classList.remove("hidden");
+  });
+}
+
+confirmOkBtn?.addEventListener("click", () => {
+  confirmOverlayEl.classList.add("hidden");
+  _confirmResolve?.(true);
+  _confirmResolve = null;
+});
+confirmCancelBtn?.addEventListener("click", () => {
+  confirmOverlayEl.classList.add("hidden");
+  _confirmResolve?.(false);
+  _confirmResolve = null;
+});
+
 // ═══════════════════════════════════════════════════════
 // SPA — Tab switching, Navigate controls, Memoverse
 // ═══════════════════════════════════════════════════════
@@ -937,13 +981,17 @@ let _activeTab = "preserve";
 const tabBtns   = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
 
-const preserveActionBtn   = document.getElementById("preserve-action-btn");
+const preserveActionBtn     = document.getElementById("preserve-action-btn");
+const preserveActionLabelEl = preserveActionBtn?.querySelector("span");
 
 // Proxy: visible action button → hidden submit button inside the form
 if (preserveActionBtn && uploadButton) {
   new MutationObserver(() => {
     preserveActionBtn.disabled = uploadButton.disabled;
-    preserveActionBtn.textContent = uploadButton.textContent.includes("building") ? "building…" : "preserve";
+    // Only the label span updates — the icon markup stays put.
+    if (preserveActionLabelEl) {
+      preserveActionLabelEl.textContent = uploadButton.textContent.includes("Building") ? "Building…" : "Preserve";
+    }
   }).observe(uploadButton, { attributes: true, attributeFilter: ["disabled"], childList: true, subtree: true, characterData: true });
   preserveActionBtn.addEventListener("click", () => { if (!uploadButton.disabled) uploadButton.click(); });
 }
@@ -976,6 +1024,7 @@ const exploreTimelineEl  = document.getElementById("explore-timeline");
 const tlSliderFromEl     = document.getElementById("tl-slider-from");
 const tlSliderToEl       = document.getElementById("tl-slider-to");
 const tlFillEl           = document.getElementById("tl-fill");
+const tlHistEl           = document.getElementById("tl-hist");
 const tlYrFromEl         = document.getElementById("tl-yr-from");
 const tlYrToEl           = document.getElementById("tl-yr-to");
 
@@ -989,6 +1038,66 @@ let _cZoom = 1, _cPanX = 0, _cPanY = 0;
 const _cloudPtrs = new Map(); // pointerId → {x, y}
 let _pinchDist0 = null, _pinchZoom0 = 1;
 let _panning = false, _panPt = null;
+
+// The blurred, animated background orbs (both the global #fluid-bg and the
+// Explore tab's own separate .explore-orb layer — see upload.css) are
+// expensive to keep re-rasterizing every frame (large `filter: blur()`
+// over continuously-animating shapes). Left running WHILE a pinch-zoom or
+// pan gesture is also recalculating transforms on every touchmove, the two
+// together blow the frame budget on mobile and both the gesture AND the
+// background visibly stutter. Pausing the orb animations for the duration
+// of an active gesture — resuming right after — hands that budget back to
+// the interaction that actually needs it.
+let _wheelZoomTimer = null;
+function _setGestureActive(active) {
+  document.body.classList.toggle("nav-gesture-active", active);
+}
+
+// Cached once per gesture instead of via getBoundingClientRect() on every
+// single pointermove — that was a synchronous layout read immediately
+// followed by a transform write, every touch event, which is exactly the
+// write/read/write pattern that causes panning to visibly stutter instead of
+// tracking the finger smoothly. The container's rect can't change size
+// mid-gesture in this layout, so one measurement per gesture is enough.
+let _cloudRect = null;
+function _getCloudRect() {
+  if (!_cloudRect) _cloudRect = exploreCloudEl?.getBoundingClientRect() ?? null;
+  return _cloudRect;
+}
+window.addEventListener("resize", () => { _cloudRect = null; });
+
+// Momentum: a couple of recent (dx, dy, dt) samples while panning, used to
+// keep the cloud gliding briefly after the finger lifts instead of stopping
+// dead — the difference between "dragged an image" and "panned a map".
+let _panVelX = 0, _panVelY = 0, _panLastT = 0;
+let _momentumRaf = null;
+
+function _stopMomentum() {
+  if (_momentumRaf) { cancelAnimationFrame(_momentumRaf); _momentumRaf = null; }
+}
+
+const MOMENTUM_FRICTION  = 0.94; // velocity multiplier per frame — higher = glides further
+const MOMENTUM_MIN_SPEED = 0.03; // px/ms below which momentum just stops
+
+function _startMomentum() {
+  _stopMomentum();
+  function step() {
+    _cPanX += _panVelX * 16;
+    _cPanY += _panVelY * 16;
+    _panVelX *= MOMENTUM_FRICTION;
+    _panVelY *= MOMENTUM_FRICTION;
+    _clampPan();
+    _applyCloudTransform();
+    if (Math.hypot(_panVelX, _panVelY) > MOMENTUM_MIN_SPEED) {
+      _momentumRaf = requestAnimationFrame(step);
+    } else {
+      _momentumRaf = null;
+    }
+  }
+  if (Math.hypot(_panVelX, _panVelY) > MOMENTUM_MIN_SPEED) {
+    _momentumRaf = requestAnimationFrame(step);
+  }
+}
 
 // Practically unlimited — high enough that any two labels, no matter how
 // close their underlying x_pct/y_pct, can always be zoomed apart into
@@ -1006,8 +1115,48 @@ function _applyCloudTransform() {
   exploreWordsEl.style.setProperty("--zoom", _cZoom);
 }
 
+// Inverse of the transform above: given a point in SCREEN (client) space,
+// find the corresponding position in the unit square (x_pct/y_pct) that a
+// word's left/top % is expressed in. Used by word-dragging to derive a
+// position straight from wherever the pointer currently is, rather than
+// accumulating a delta — which matters once auto-panning (below) can move
+// the content out from under a pointer that hasn't itself moved.
+function _screenToPct(clientX, clientY) {
+  const rect = _getCloudRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const localX = cx + (clientX - cx - _cPanX) / _cZoom;
+  const localY = cy + (clientY - cy - _cPanY) / _cZoom;
+  return { x_pct: (localX - rect.left) / rect.width, y_pct: (localY - rect.top) / rect.height };
+}
+
+// Edge auto-pan while dragging a word: a finger/mouse can only physically
+// reach the edge of the actual screen, which used to be a hard wall on how
+// far a memory could be repositioned. Standard drag-and-drop fix: once the
+// pointer gets within DRAG_EDGE_MARGIN of the viewport edge while dragging,
+// keep panning the whole cloud underneath it, like scrolling a file manager
+// by dragging near its edge — so "move it further" is just "hold it at the
+// edge for a moment" instead of a hard limit.
+const DRAG_EDGE_MARGIN     = 56; // px from the container edge that triggers auto-pan
+const DRAG_EDGE_MAX_SPEED  = 16; // px panned per animation frame, right at the edge
+
+// A flat 200px cap meant you could pan barely past the middle of the cloud
+// before hitting a wall — nowhere near enough to reach far-apart words once
+// zoomed in (the whole point of the zoom-to-separate-overlaps feature), and
+// it made dragging a word to reposition it impossible past that point too.
+// Scale the pan range to the actual container size instead, so at any zoom
+// level you can always slide the full zoomed content across the viewport
+// and reach every corner.
+// Effectively unlimited, same philosophy as ZOOM_MAX — this only exists to
+// keep the numbers finite, not to actually constrain composing the layout.
+// A tighter formula (still generous by the numbers) still read as "boxed in"
+// in practice, so rather than keep guessing at a multiplier, this is sized
+// to be a non-issue at any zoom level or screen size: you can pan the cloud
+// dozens of container-widths in any direction and place a memory anywhere.
 function _clampPan() {
-  const maxPan = 200 * _cZoom;
+  const rect = _getCloudRect();
+  const span = rect ? Math.max(rect.width, rect.height) : 400;
+  const maxPan = span * (_cZoom + 40);
   _cPanX = Math.max(-maxPan, Math.min(maxPan, _cPanX));
   _cPanY = Math.max(-maxPan, Math.min(maxPan, _cPanY));
 }
@@ -1019,53 +1168,115 @@ exploreCloudEl?.addEventListener("wheel", e => {
   _cZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, _cZoom * f));
   _clampPan();
   _applyCloudTransform();
+  // No clean "wheel gesture ended" event — just re-arm a short timeout on
+  // every tick and let it fire once scrolling actually stops.
+  _setGestureActive(true);
+  clearTimeout(_wheelZoomTimer);
+  _wheelZoomTimer = setTimeout(() => _setGestureActive(false), 220);
 }, { passive: false });
 
-// Cloud pointer events for pinch zoom + background pan
-exploreCloudEl?.addEventListener("pointerdown", e => {
-  if (e.target.closest(".explore-word")) return; // let words handle their own events
-  e.preventDefault();
-  exploreCloudEl.setPointerCapture(e.pointerId);
-  _cloudPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+// ── Unified multi-touch gesture core ──────────────────────────────────────
+// Pinch-to-zoom has to work no matter which element either finger lands on —
+// including directly on a word, which is near-certain in a dense cloud. This
+// used to be two separate systems: the cloud tracked its own pointers for
+// pinch/pan, and each word called stopPropagation() in its own pointerdown,
+// which meant a finger landing on a word was INVISIBLE to the cloud's pinch
+// detector — a two-finger pinch with one finger on a word read as a single-
+// finger pan from the other finger, so the content moved instead of zooming.
+// These three functions are now the ONE place pinch/pan state is decided,
+// fed by pointer events from the cloud AND from every word alike.
+// allowPan distinguishes "this pointer's FIRST-finger movement is allowed to
+// pan the background" (true for touches starting on empty cloud space) from
+// "this pointer only ever counts toward pinch detection, never pans on its
+// own" (false for touches starting on a word — a single finger on a word
+// means tap-or-drag-THAT-word, never drag-the-background). A SECOND finger
+// joining always starts a pinch regardless of allowPan, since by then it no
+// longer matters which element either finger originally landed on.
+function _cloudPointerDown(pointerId, clientX, clientY, allowPan) {
+  _cloudRect = null;    // re-measure once for this gesture, not on every move
+  _stopMomentum();      // grabbing anything stops any glide in progress
+  _cloudPtrs.set(pointerId, { x: clientX, y: clientY });
   if (_cloudPtrs.size === 1) {
-    _panning = true;
-    _panPt = { x: e.clientX, y: e.clientY, px: _cPanX, py: _cPanY };
-  }
-  if (_cloudPtrs.size === 2) {
+    if (allowPan) {
+      _panning = true;
+      _panPt = { x: clientX, y: clientY, px: _cPanX, py: _cPanY };
+      _panVelX = 0; _panVelY = 0;
+      _panLastT = performance.now();
+    }
+  } else if (_cloudPtrs.size === 2) {
+    // A second finger just joined — this is now a pinch, not a pan, no
+    // matter which of the two elements it landed on.
     _panning = false;
     const pts = [..._cloudPtrs.values()];
     _pinchDist0 = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
     _pinchZoom0 = _cZoom;
   }
-}, { passive: false });
+  _setGestureActive(true);
+}
 
-exploreCloudEl?.addEventListener("pointermove", e => {
-  if (!_cloudPtrs.has(e.pointerId)) return;
-  _cloudPtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+// Returns true if this move was consumed as a pinch or pan (so a word knows
+// to abandon its own tap/drag interpretation for this gesture). allowPan
+// same meaning as above — a word's own single-finger move must never pan the
+// background, only ever participate in a pinch once a second finger exists.
+function _cloudPointerMove(pointerId, clientX, clientY, allowPan) {
+  if (!_cloudPtrs.has(pointerId)) return false;
+  const prev = _cloudPtrs.get(pointerId);
+  _cloudPtrs.set(pointerId, { x: clientX, y: clientY });
   if (_cloudPtrs.size === 2 && _pinchDist0) {
     const pts = [..._cloudPtrs.values()];
     const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
     _cZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, _pinchZoom0 * dist / _pinchDist0));
     _clampPan();
     _applyCloudTransform();
-  } else if (_panning && _panPt) {
-    _cPanX = _panPt.px + (e.clientX - _panPt.x);
-    _cPanY = _panPt.py + (e.clientY - _panPt.y);
+    return true;
+  }
+  if (allowPan && _panning && _panPt && _cloudPtrs.size === 1) {
+    _cPanX = _panPt.px + (clientX - _panPt.x);
+    _cPanY = _panPt.py + (clientY - _panPt.y);
     _clampPan();
     _applyCloudTransform();
+    // Smoothed (EMA) instantaneous velocity in px/ms, for the momentum glide
+    // on release — a single sample is noisy (touch coordinates jitter a
+    // little frame to frame), so this blends in the new sample gently
+    // rather than trusting it outright.
+    const now = performance.now();
+    const dt  = Math.max(1, now - _panLastT);
+    _panVelX = _panVelX * 0.72 + ((clientX - prev.x) / dt) * 0.28;
+    _panVelY = _panVelY * 0.72 + ((clientY - prev.y) / dt) * 0.28;
+    _panLastT = now;
+    return true;
   }
+  return false;
+}
+
+function _cloudPointerUp(pointerId) {
+  const wasPanning = _panning && _cloudPtrs.size === 1;
+  _cloudPtrs.delete(pointerId);
+  _panning = false;
+  _pinchDist0 = null;
+  if (wasPanning) _startMomentum(); // let go while moving — cloud keeps gliding briefly
+  if (_cloudPtrs.size === 0) _setGestureActive(false);
+}
+
+// Cloud pointer events for pinch zoom + background pan — fires for touches
+// that start on empty space. Touches starting on a word feed the SAME
+// _cloudPointer*() functions from that word's own listeners instead (see
+// buildWordCloud()), so both paths share one source of truth for counting
+// fingers and detecting a pinch, regardless of which element either finger
+// happens to land on.
+exploreCloudEl?.addEventListener("pointerdown", e => {
+  if (e.target.closest(".explore-word")) return; // words register themselves
+  e.preventDefault();
+  exploreCloudEl.setPointerCapture(e.pointerId);
+  _cloudPointerDown(e.pointerId, e.clientX, e.clientY, true);
+}, { passive: false });
+
+exploreCloudEl?.addEventListener("pointermove", e => {
+  _cloudPointerMove(e.pointerId, e.clientX, e.clientY, true);
 });
 
-exploreCloudEl?.addEventListener("pointerup", e => {
-  _cloudPtrs.delete(e.pointerId);
-  _panning = false;
-  _pinchDist0 = null;
-});
-exploreCloudEl?.addEventListener("pointercancel", e => {
-  _cloudPtrs.delete(e.pointerId);
-  _panning = false;
-  _pinchDist0 = null;
-});
+exploreCloudEl?.addEventListener("pointerup", e => { _cloudPointerUp(e.pointerId); });
+exploreCloudEl?.addEventListener("pointercancel", e => { _cloudPointerUp(e.pointerId); });
 
 async function loadExplore() {
   if (_exploreLoaded) return;
@@ -1121,13 +1332,27 @@ async function loadExplore() {
 const MAP_GROUND_SPAN = 640; // MUST match GROUND_SPAN in viewer.js
 let _camMarkerEl = null;
 let _camPollId = null;
+let _camTouchingId = null;
+// While the viewer is catching up to a just-selected memory, the live
+// camera-state we poll every 300ms still reports the OLD position — applying
+// it naively snaps the marker forward to the target then back to the stale
+// real position, which reads as a glitch. Rather than guess how long the
+// viewer will take (its own selection-poll interval + flight time can vary),
+// hold the marker at the target and ignore real-position updates until the
+// server itself confirms both that this scene is focused AND the reported
+// position has actually converged near the target — a data-driven wait
+// instead of a fixed timer, so it can't resume too early OR get stuck.
+let _camNavTargetId = null;
+let _camNavTargetPos = null;
+let _camNavTimeoutTimer = null;
+let _camNavResetTimer = null;
 
 function _ensureCamMarker() {
   if (_camMarkerEl && _camMarkerEl.parentNode) return _camMarkerEl;
   if (!exploreWordsEl) return null;
   const el = document.createElement("div");
   el.className = "map-camera";
-  el.innerHTML = '<span class="map-camera-cone"></span><span class="map-camera-dot"></span>';
+  el.innerHTML = '<span class="map-camera-ring"></span><span class="map-camera-dot"></span>';
   exploreWordsEl.appendChild(el); // inside the pan/zoom-transformed layer
   _camMarkerEl = el;
   return el;
@@ -1145,12 +1370,49 @@ async function _pollCameraState() {
     // Same mapping the viewer uses, inverted: world (x,z) → unit-square pct.
     const xp = Math.max(-0.05, Math.min(1.05, x / MAP_GROUND_SPAN + 0.5));
     const yp = Math.max(-0.05, Math.min(1.05, z / MAP_GROUND_SPAN + 0.5));
-    // Heading on the map: forward is (sin yaw, cos yaw) in (right, down); the
-    // arrow art points up, so rotate it by atan2(sinYaw, -cosYaw).
-    const deg = Math.atan2(Math.sin(yaw), -Math.cos(yaw)) * 180 / Math.PI;
+    // Always fully visible, and counter-scaled against the cloud's zoom (the
+    // same trick .explore-word uses) so it stays a constant, easy-to-spot
+    // size on screen — without this it shrinks to an unreadable speck when
+    // zoomed out, which read as "the marker disappeared".
+    el.style.opacity = "1";
+
+    // If we're holding at an optimistic nav target, only let go once the
+    // server confirms arrival: this scene is focused AND its reported
+    // position is actually close to the target. Until then, ignore whatever
+    // (still-stale) position the poll reports.
+    if (_camNavTargetId) {
+      const closeEnough = Math.hypot(xp - _camNavTargetPos.x_pct, yp - _camNavTargetPos.y_pct) < 0.03;
+      if (focused_scene_id === _camNavTargetId && closeEnough) {
+        _camNavTargetId = null;
+        _camNavTargetPos = null;
+        clearTimeout(_camNavTimeoutTimer);
+      } else {
+        return; // keep holding at the target position set by focusExploreScene
+      }
+    }
+
     el.style.left = `${xp * 100}%`;
     el.style.top  = `${yp * 100}%`;
-    el.style.transform = `rotate(${deg}deg)`;
+    // Heading on the map: forward is (sin yaw, cos yaw) in (right, down);
+    // the arrow art points up, so rotate it by atan2(sinYaw, -cosYaw).
+    const deg = Math.atan2(Math.sin(yaw), -Math.cos(yaw)) * 180 / Math.PI;
+    el.style.transform = `rotate(${deg}deg) scale(calc(1 / var(--zoom, 1)))`;
+
+    // Glow/highlight the marker (and the word itself) when it's sitting
+    // right on top of a memory, so it's obvious which one you'd land on.
+    const TOUCH_DIST = 0.045;
+    let nearestId = null, nearestDist = Infinity;
+    _exploreWords.forEach(({ pos: wPos }, id) => {
+      const d = Math.hypot(wPos.x_pct - xp, wPos.y_pct - yp);
+      if (d < nearestDist) { nearestDist = d; nearestId = id; }
+    });
+    const touchingId = nearestDist < TOUCH_DIST ? nearestId : null;
+    if (touchingId !== _camTouchingId) {
+      if (_camTouchingId) _exploreWords.get(_camTouchingId)?.el.classList.remove("cam-touching");
+      el.classList.toggle("touching", !!touchingId);
+      if (touchingId) _exploreWords.get(touchingId)?.el.classList.add("cam-touching");
+      _camTouchingId = touchingId;
+    }
 
     // Mirror whichever memory the viewer is currently focused on — a tap
     // here (focusExploreScene()) is one way that happens, but the viewer
@@ -1195,55 +1457,164 @@ function buildWordCloud(allScenes, positions) {
 
     let pressTimer = null;
     let isDragging = false;
-    let dragStartX = 0, dragStartY = 0;
-    let origXpct = pos.x_pct, origYpct = pos.y_pct;
+    let pinchInvolved = false; // this pointer turned out to be part of a 2-finger pinch
+    let deleteRequested = false; // long-press on an already-focused word — see confirmDelete()
+    let grabDX = 0, grabDY = 0; // offset (pct) between the word and the exact point grabbed
+    let lastClientX = 0, lastClientY = 0;
+    let autoPanRaf = null;
+
+    // Recomputes the word's pct position fresh from a screen point (plus the
+    // grab offset) rather than accumulating a delta — so it stays correct
+    // even when the CONTAINER moved (auto-pan) instead of the pointer.
+    // Deliberately UNCLAMPED — memories aren't confined to a box in the 3D
+    // world (worldPositions there is just x_pct/y_pct mapped onto the ground
+    // plane with no bounds either), so the map shouldn't confine them to one
+    // either. left/top past 0%/100% render fine, just outside the visible
+    // area until panned to — exactly like walking to an unexplored part of
+    // the 3D world.
+    function applyFromPointer(clientX, clientY) {
+      const p = _screenToPct(clientX, clientY);
+      pos.x_pct = p.x_pct + grabDX;
+      pos.y_pct = p.y_pct + grabDY;
+      el.style.left = `${pos.x_pct * 100}%`;
+      el.style.top  = `${pos.y_pct * 100}%`;
+    }
+
+    // Deleting a memory needs to be deliberate: long-pressing an ALREADY
+    // selected word (i.e. a second, separate interaction after the tap that
+    // focused it) asks for it, rather than a visible button that's one
+    // stray touch away from a mistake. Uses an in-app confirm dialog, not
+    // window.confirm — unreliable inside this app's fullscreen/kiosk view.
+    async function confirmDelete() {
+      haptic([20, 30, 20]);
+      const ok = await showConfirm(
+        `Delete "${name}"? This permanently removes its photo, 3D scene, and story for everyone — it cannot be undone.`
+      );
+      if (!ok) return;
+      haptic([30, 60, 30]);
+      try {
+        const r = await fetch(`/api/scenes/${scene.id}`, { method: "DELETE" });
+        if (!r.ok) throw new Error("delete failed");
+        el.remove();
+        _exploreWords.delete(scene.id);
+        if (_exploreFocusedId === scene.id) _exploreFocusedId = null;
+      } catch {
+        showAlert("Couldn't delete this memory — check your connection and try again.");
+      }
+    }
+
+    function autoPanStep() {
+      if (!isDragging) { autoPanRaf = null; return; }
+      const rect = exploreCloudEl.getBoundingClientRect();
+      const distLeft = lastClientX - rect.left, distRight = rect.right - lastClientX;
+      const distTop  = lastClientY - rect.top,  distBottom = rect.bottom - lastClientY;
+      let panDX = 0, panDY = 0;
+      if (distLeft   < DRAG_EDGE_MARGIN) panDX =  DRAG_EDGE_MAX_SPEED * (1 - Math.max(0, distLeft)   / DRAG_EDGE_MARGIN);
+      if (distRight  < DRAG_EDGE_MARGIN) panDX = -DRAG_EDGE_MAX_SPEED * (1 - Math.max(0, distRight)  / DRAG_EDGE_MARGIN);
+      if (distTop    < DRAG_EDGE_MARGIN) panDY =  DRAG_EDGE_MAX_SPEED * (1 - Math.max(0, distTop)    / DRAG_EDGE_MARGIN);
+      if (distBottom < DRAG_EDGE_MARGIN) panDY = -DRAG_EDGE_MAX_SPEED * (1 - Math.max(0, distBottom) / DRAG_EDGE_MARGIN);
+      if (panDX || panDY) {
+        _cPanX += panDX; _cPanY += panDY;
+        _clampPan();
+        _applyCloudTransform();
+        applyFromPointer(lastClientX, lastClientY);
+      }
+      autoPanRaf = requestAnimationFrame(autoPanStep);
+    }
 
     el.addEventListener("pointerdown", e => {
       e.preventDefault();
-      e.stopPropagation();
+      // NOTE: deliberately NOT calling stopPropagation() — this pointer must
+      // still reach the shared pinch/pan registry below (allowPan=false: a
+      // word's own single finger never pans the background, but it MUST
+      // still be counted, otherwise a pinch with one finger on a word is
+      // invisible to pinch detection and reads as a one-finger pan from the
+      // other finger — the text visibly moving instead of zooming.
       el.setPointerCapture(e.pointerId);
       isDragging = false;
-      dragStartX = e.clientX; dragStartY = e.clientY;
-      origXpct = pos.x_pct; origYpct = pos.y_pct;
+      pinchInvolved = false;
+      lastClientX = e.clientX; lastClientY = e.clientY;
+      _cloudPointerDown(e.pointerId, e.clientX, e.clientY, false);
+      if (_cloudPtrs.size >= 2) {
+        // This word-touch turned out to be the pinch's second finger.
+        pinchInvolved = true;
+        return;
+      }
+      const startPct = _screenToPct(e.clientX, e.clientY);
+      grabDX = pos.x_pct - startPct.x_pct;
+      grabDY = pos.y_pct - startPct.y_pct;
+      deleteRequested = false;
       pressTimer = setTimeout(() => {
+        if (_cloudPtrs.size >= 2) { pinchInvolved = true; return; } // a second finger joined mid-press
+        if (el.classList.contains("focused")) {
+          // Already selected from an earlier tap — this long-press means
+          // "delete", not "move".
+          deleteRequested = true;
+          confirmDelete();
+          return;
+        }
         isDragging = true;
         el.classList.add("dragging");
         haptic(25);
+        if (!autoPanRaf) autoPanRaf = requestAnimationFrame(autoPanStep);
       }, 420);
     }, { passive: false });
 
     el.addEventListener("pointermove", e => {
+      lastClientX = e.clientX; lastClientY = e.clientY;
+      if (_cloudPointerMove(e.pointerId, e.clientX, e.clientY, false)) {
+        // A pinch is active (this pointer is one of its two fingers) —
+        // abandon any tap/drag interpretation of this touch entirely.
+        pinchInvolved = true;
+        clearTimeout(pressTimer);
+        if (isDragging) { isDragging = false; el.classList.remove("dragging"); }
+        return;
+      }
       if (!isDragging) return;
-      const rect = exploreCloudEl.getBoundingClientRect();
-      // Divide by zoom so drag distance matches visual movement
-      const dx = (e.clientX - dragStartX) / (_cZoom * rect.width);
-      const dy = (e.clientY - dragStartY) / (_cZoom * rect.height);
-      pos.x_pct = Math.max(0.04, Math.min(0.96, origXpct + dx));
-      pos.y_pct = Math.max(0.04, Math.min(0.96, origYpct + dy));
-      el.style.left = `${pos.x_pct * 100}%`;
-      el.style.top  = `${pos.y_pct * 100}%`;
+      applyFromPointer(e.clientX, e.clientY);
     });
 
-    el.addEventListener("pointerup", () => {
+    el.addEventListener("pointerup", e => {
       clearTimeout(pressTimer);
       el.classList.remove("dragging");
-      if (isDragging) {
-        isDragging = false;
+      if (autoPanRaf) { cancelAnimationFrame(autoPanRaf); autoPanRaf = null; }
+      const wasDragging = isDragging;
+      isDragging = false;
+      _cloudPointerUp(e.pointerId);
+      if (wasDragging) {
         fetch("/api/scene-position", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ scene_id: scene.id, x_pct: pos.x_pct, y_pct: pos.y_pct }),
-        }).catch(() => {});
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(resolved => {
+            // The server pushes the drop point away from anything it'd
+            // otherwise land on top of (see _resolve_no_overlap in
+            // main.py) — if it moved the spot, snap the word to match so
+            // it doesn't sit visually overlapping until the next reload.
+            if (!resolved) return;
+            if (resolved.x_pct === pos.x_pct && resolved.y_pct === pos.y_pct) return;
+            pos.x_pct = resolved.x_pct;
+            pos.y_pct = resolved.y_pct;
+            el.style.left = `${pos.x_pct * 100}%`;
+            el.style.top  = `${pos.y_pct * 100}%`;
+          })
+          .catch(() => {});
         haptic(20);
-      } else {
+      } else if (!pinchInvolved && !deleteRequested) {
+        // A genuine tap — not a drag, and this finger was never part of a
+        // pinch (that would mean the OTHER finger's lift, not a selection).
         focusExploreScene(scene);
       }
     });
 
-    el.addEventListener("pointercancel", () => {
+    el.addEventListener("pointercancel", e => {
       clearTimeout(pressTimer);
       el.classList.remove("dragging");
+      if (autoPanRaf) { cancelAnimationFrame(autoPanRaf); autoPanRaf = null; }
       isDragging = false;
+      _cloudPointerUp(e.pointerId);
     });
 
     exploreWordsEl.appendChild(el);
@@ -1264,6 +1635,7 @@ function setupTimeline(allScenes) {
   tlSliderToEl.value   = maxY;
   if (tlYrFromEl) tlYrFromEl.textContent = minY;
   if (tlYrToEl)   tlYrToEl.textContent   = maxY;
+  _renderTlHistogram(years, minY, maxY);
   _updateTlFill(minY, maxY, minY, maxY);
 
   function onChange() {
@@ -1277,11 +1649,54 @@ function setupTimeline(allScenes) {
     if (tlYrFromEl) tlYrFromEl.textContent = isAll ? "all" : from;
     if (tlYrToEl)   tlYrToEl.textContent   = isAll ? ""    : to;
     _updateTlFill(minY, maxY, from, to);
+    _updateTlHistOpacity(from, to, isAll);
     _applyTimelineFilter(from, to, isAll);
   }
 
   tlSliderFromEl?.addEventListener("input", onChange);
   tlSliderToEl?.addEventListener("input", onChange);
+}
+
+// Density histogram: one bar per decade covering the memory set's year
+// range, height proportional to how many memories fall in it — turns the
+// range filter into something that actually shows WHEN memories cluster,
+// instead of a plain featureless bar.
+function _renderTlHistogram(years, minY, maxY) {
+  if (!tlHistEl) return;
+  tlHistEl.innerHTML = "";
+  const span = maxY - minY || 1;
+
+  const startDecade = Math.floor(minY / 10) * 10;
+  const endDecade    = Math.floor(maxY / 10) * 10;
+  const counts = new Map();
+  for (let d = startDecade; d <= endDecade; d += 10) counts.set(d, 0);
+  years.forEach(y => {
+    const d = Math.floor(y / 10) * 10;
+    counts.set(d, (counts.get(d) || 0) + 1);
+  });
+  const maxCount = Math.max(1, ...counts.values());
+
+  counts.forEach((count, decade) => {
+    if (count === 0) return;
+    const bar = document.createElement("div");
+    bar.className = "tl-hist-bar";
+    bar.dataset.decade = decade;
+    const leftPct  = Math.max(0, ((decade - minY) / span) * 100);
+    const widthPct = Math.max(2.2, (10 / span) * 100 - 1);
+    bar.style.left   = `${leftPct}%`;
+    bar.style.width  = `${widthPct}%`;
+    bar.style.height = `${16 + (count / maxCount) * 84}%`;
+    tlHistEl.appendChild(bar);
+  });
+}
+
+function _updateTlHistOpacity(from, to, isAll) {
+  if (!tlHistEl) return;
+  for (const bar of tlHistEl.children) {
+    const decade = parseInt(bar.dataset.decade);
+    const inRange = isAll || (decade + 9 >= from && decade <= to);
+    bar.style.opacity = inRange ? "1" : "0.22";
+  }
 }
 
 function _updateTlFill(minY, maxY, from, to) {
@@ -1315,6 +1730,42 @@ function focusExploreScene(scene) {
   _exploreWords.forEach(({ el }) => el.classList.remove("focused"));
   _exploreWords.get(scene.id)?.el.classList.add("focused");
   _exploreFocusedId = scene.id;
+
+  // Hop the "you are here" marker to the selected memory itself, instead of
+  // waiting for the viewer to actually catch up and post its own
+  // camera-state. Real poll-driven position updates are held off (see the
+  // _camNavTargetId check in _pollCameraState) until the server confirms
+  // this scene is actually focused AND its reported position has converged
+  // near here, so the marker can't get yanked back to a stale position
+  // mid-flight — and it can't get stuck forever either, since a fresh
+  // selection always overwrites the previous target/timeout below.
+  const targetPos = _exploreWords.get(scene.id)?.pos;
+  if (targetPos) {
+    const el = _ensureCamMarker();
+    if (el) {
+      _camNavTargetId = scene.id;
+      _camNavTargetPos = targetPos;
+      el.style.transition =
+        "left 550ms cubic-bezier(0.22,0.61,0.36,1), " +
+        "top 550ms cubic-bezier(0.22,0.61,0.36,1), opacity 0.25s ease";
+      el.style.left = `${targetPos.x_pct * 100}%`;
+      el.style.top  = `${targetPos.y_pct * 100}%`;
+      _exploreWords.forEach(({ el: wEl }) => wEl.classList.remove("cam-touching"));
+      el.classList.add("touching");
+      _exploreWords.get(scene.id)?.el.classList.add("cam-touching");
+      _camTouchingId = scene.id;
+      clearTimeout(_camNavResetTimer);
+      _camNavResetTimer = setTimeout(() => { el.style.transition = ""; }, 620);
+      // Safety valve: don't hold forever if the viewer never confirms
+      // arrival (offline, or the flight overshoots the 0.03 tolerance).
+      clearTimeout(_camNavTimeoutTimer);
+      _camNavTimeoutTimer = setTimeout(() => {
+        _camNavTargetId = null;
+        _camNavTargetPos = null;
+      }, 6000);
+    }
+  }
+
   fetch("/api/select-scene", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1368,10 +1819,16 @@ function _checkStopNav() {
   }
 }
 
+// Soft, periodic haptic tick while a stick is actively pushed away from
+// centre — gives continuous tactile feedback while moving/looking, not just
+// a single pulse when the drag starts and stops.
+const NAV_HAPTIC_INTERVAL_MS = 260;
+
 function initJoystick(stickEl, knobEl, onUpdate) {
   let _active    = false;
   let _pid       = null;
   let _wasAtMax  = false;
+  let _hapticId  = null;
 
   // Small deadzone right around centre — without it, an imprecisely-centred
   // thumb (or a touch that never releases to the EXACT (0,0) pixel) reports a
@@ -1396,16 +1853,24 @@ function initJoystick(stickEl, knobEl, onUpdate) {
              ny: dead ? 0 : (oy * scale) / maxR, atMax };
   }
 
+  let _curNx = 0, _curNy = 0;
+
   stickEl.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     stickEl.setPointerCapture(e.pointerId);
     _active = true; _pid = e.pointerId; _wasAtMax = false;
     haptic(20);
     const { dx, dy, nx, ny } = getPos(e);
+    _curNx = nx; _curNy = ny;
     knobEl.style.transition = "none";
     knobEl.style.transform  = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     onUpdate(nx, ny);
     _startNavLoop();
+    if (!_hapticId) {
+      _hapticId = setInterval(() => {
+        if (Math.hypot(_curNx, _curNy) > STICK_DEADZONE) haptic(10);
+      }, NAV_HAPTIC_INTERVAL_MS);
+    }
   }, { passive: false });
 
   stickEl.addEventListener("pointermove", (e) => {
@@ -1413,6 +1878,7 @@ function initJoystick(stickEl, knobEl, onUpdate) {
     const { dx, dy, nx, ny, atMax } = getPos(e);
     if (atMax && !_wasAtMax) haptic(20);
     _wasAtMax = atMax;
+    _curNx = nx; _curNy = ny;
     knobEl.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     onUpdate(nx, ny);
   });
@@ -1420,6 +1886,9 @@ function initJoystick(stickEl, knobEl, onUpdate) {
   function onEnd(e) {
     if (!_active || e.pointerId !== _pid) return;
     _active = false; _pid = null; _wasAtMax = false;
+    _curNx = 0; _curNy = 0;
+    clearInterval(_hapticId);
+    _hapticId = null;
     knobEl.style.transition = "transform 0.22s ease";
     knobEl.style.transform  = "translate(-50%, -50%)";
     onUpdate(0, 0);
@@ -1431,6 +1900,9 @@ function initJoystick(stickEl, knobEl, onUpdate) {
 
 function initAltSlider(trackEl, thumbEl) {
   let _active = false;
+  let _hapticId = null;
+  let _curAlt = 0;
+  const ALT_DEADZONE = 0.08;
 
   function altFrom(cy) {
     const rect = trackEl.getBoundingClientRect();
@@ -1446,16 +1918,23 @@ function initAltSlider(trackEl, thumbEl) {
     trackEl.classList.add("active");
     haptic(20);
     const alt = altFrom(e.touches[0].clientY);
+    _curAlt = alt;
     setThumb(alt);
     thumbEl.style.transition = "none";
     _navState.move_y = alt;
     _startNavLoop();
+    if (!_hapticId) {
+      _hapticId = setInterval(() => {
+        if (Math.abs(_curAlt) > ALT_DEADZONE) haptic(10);
+      }, NAV_HAPTIC_INTERVAL_MS);
+    }
   }, { passive: false });
 
   trackEl.addEventListener("touchmove", (e) => {
     e.preventDefault();
     if (!_active) return;
     const alt = altFrom(e.touches[0].clientY);
+    _curAlt = alt;
     setThumb(alt);
     _navState.move_y = alt;
   }, { passive: false });
@@ -1463,6 +1942,9 @@ function initAltSlider(trackEl, thumbEl) {
   function onEnd() {
     if (!_active) return;
     _active = false;
+    _curAlt = 0;
+    clearInterval(_hapticId);
+    _hapticId = null;
     trackEl.classList.remove("active");
     haptic(20);
     _navState.move_y = 0;

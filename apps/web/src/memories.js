@@ -1,10 +1,11 @@
 import "./memories.css";
-import { initThemeToggle, carryAccentToViewerLinks, initCursor, initTapSounds, initFullscreenPersistence } from "./theme.js";
+import { initThemeToggle, carryAccentToViewerLinks, initCursor, initTapSounds, initFullscreenToggle, initFullscreenPersistence } from "./theme.js";
 
 initThemeToggle();
 carryAccentToViewerLinks();
 initCursor();
 initTapSounds();
+initFullscreenToggle();
 initFullscreenPersistence();
 
 const statusEl = document.getElementById("memories-status");

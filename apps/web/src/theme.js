@@ -72,10 +72,23 @@ export function initSplash() {
 
 // Manual fullscreen toggle — a fallback for when the splash auto-request
 // didn't fire (browser doesn't support it, or the visitor exited fullscreen
-// later and wants back in).
+// later and wants back in). Works identically on touch and pointer input —
+// it's a plain click/tap target with no gesture handling involved, so mobile
+// and desktop need no separate code path here.
+const FS_ICON_EXPAND   = "M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3";
+const FS_ICON_COMPRESS = "M9 3v3a2 2 0 0 1-2 2H4M15 3v3a2 2 0 0 0 2 2h3M21 15h-3a2 2 0 0 0-2 2v3M9 21v-3a2 2 0 0 0-2-2H4";
+
 export function initFullscreenToggle() {
   const btn = document.getElementById("fullscreen-toggle-btn");
   if (!btn) return;
+  const path = btn.querySelector("path");
+
+  function syncIcon() {
+    const active = !!document.fullscreenElement;
+    if (path) path.setAttribute("d", active ? FS_ICON_COMPRESS : FS_ICON_EXPAND);
+    btn.setAttribute("aria-label", active ? "Exit fullscreen" : "Enter fullscreen");
+  }
+
   btn.addEventListener("click", () => {
     if (document.fullscreenElement) {
       document.exitFullscreen();
@@ -83,6 +96,8 @@ export function initFullscreenToggle() {
       document.documentElement.requestFullscreen?.().catch(() => {});
     }
   });
+  document.addEventListener("fullscreenchange", syncIcon);
+  syncIcon();
 }
 
 const FS_KEY = "memo-fullscreen";

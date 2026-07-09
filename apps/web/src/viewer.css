@@ -124,11 +124,12 @@ html, body {
   filter: drop-shadow(0 2px 40px rgba(120,160,255,0.18));
 }
 
-/* ── Spinner — same CSS border-spinner as app preserve screen ──── */
+/* ── Spinner — same ring+dot loader as app preserve screen ──── */
 .splash-spinner-wrap {
-  margin-bottom: 28px;
+  margin-bottom: 10px;
 }
 .splash-spinner {
+  position: relative;
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -136,8 +137,25 @@ html, body {
   border-top-color: rgba(220, 225, 218, 0.80);
   animation: gen-spin-simple 1.6s linear infinite;
 }
+.splash-spinner-dot {
+  position: absolute;
+  top: 6px; left: 50%;
+  width: 9px; height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  background: rgba(220, 225, 218, 0.85);
+}
 @keyframes gen-spin-simple {
   to { transform: rotate(360deg); }
+}
+
+.splash-percent {
+  margin: 0 0 18px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.90);
+  min-height: 1.4em; /* reserves space so status text below doesn't jump once this fills in */
 }
 
 .placeholder-sub {

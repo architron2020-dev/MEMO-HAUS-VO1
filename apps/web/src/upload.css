@@ -50,6 +50,17 @@ html::-webkit-scrollbar { display: none; }
   will-change: transform;
 }
 
+/* Paused for the duration of an active pinch-zoom/pan/wheel-zoom gesture in
+   the Explore word cloud (see _setGestureActive() in upload.js) — these
+   blurred, continuously-animating orbs are expensive to keep re-rasterizing
+   every frame, and doing that AT THE SAME TIME as recalculating the zoom/pan
+   transform on every touchmove was enough to blow the frame budget on
+   mobile, so both the gesture and the background stuttered together. */
+body.nav-gesture-active .orb,
+body.nav-gesture-active .explore-orb {
+  animation-play-state: paused;
+}
+
 /* Orbs — shape-morphing, multi-path, cross-mixing fluid blobs */
 .orb-a {
   width: 88vmax; height: 88vmax;
@@ -259,6 +270,68 @@ html::-webkit-scrollbar { display: none; }
 }
 
 .generating-overlay.hidden { opacity: 0; pointer-events: none; }
+
+/* ── Confirm dialog (full-screen fixed) ──────────────────── */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10, 12, 10, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+.confirm-overlay.hidden { opacity: 0; pointer-events: none; }
+
+.confirm-box {
+  max-width: 340px;
+  width: 100%;
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 24px 22px;
+  box-shadow: var(--card-shadow);
+}
+
+.confirm-message {
+  margin: 0 0 20px;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--hc);
+  text-align: center;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.confirm-btn {
+  flex: 1;
+  padding: 12px 0;
+  border-radius: 999px;
+  border: 1.5px solid var(--glass-border);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--hc);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.confirm-btn-danger {
+  border-color: rgba(190, 60, 60, 0.55);
+  background: rgba(190, 60, 60, 0.14);
+  color: rgb(160, 40, 40);
+}
 
 .gen-stage {
   position: relative;
@@ -847,13 +920,31 @@ html::-webkit-scrollbar { display: none; }
   z-index: 80;
   display: flex;
   gap: 0;
-  padding: 14px 24px 0;
+  padding: 14px 24px 34px;
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  background: transparent;
+  /* Explore's own word labels (and anything else) scroll straight underneath
+     this fixed bar, so a plain flat colour here would either hide the tabs
+     (if opaque) or let that content show straight through, unreadably
+     overlapping the tab labels (if transparent). A blurred backdrop that
+     softly feathers away at the bottom — instead of ending in a hard edge —
+     keeps the tabs legible while reading as part of the background rather
+     than a pasted-on band. */
+  background: rgba(20, 22, 30, 0.38);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  -webkit-mask-image: linear-gradient(to bottom, black 45%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 45%, transparent 100%);
+  /* The extra bottom padding above exists only so the mask has room to fade
+     out smoothly — it isn't meant to be an interactive area. Without this,
+     that fully-transparent-looking strip would still swallow taps meant for
+     whatever's scrolled underneath it (e.g. the top row of Explore words). */
+  pointer-events: none;
 }
 .tab-bar::-webkit-scrollbar { display: none; }
+
+.tab-btn { pointer-events: auto; }
 
 .tab-btn {
   flex-shrink: 0;
@@ -1000,20 +1091,16 @@ a.tab-btn { text-decoration: none; }
 .ghost-textarea {
   resize: none;
   line-height: 1.45;
-  font-size: 1.1rem;
+  font-size: 1.4rem; /* matches .ghost-input so every field reads at the same size */
 }
 
 .char-counter {
-  position: absolute;
-  bottom: 6px;
-  right: 22px;
-  font-size: 0.52rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: rgba(255,255,255,0.20);
-  pointer-events: none;
+  /* Hidden — kept in the DOM (not removed) since upload.js still writes to
+     it on every keystroke; deleting the element outright reintroduces the
+     null-reference crash this was originally added to fix (resetForm()
+     throwing after every successful upload). */
+  display: none;
 }
-.char-counter.near-limit { color: rgba(255,200,100,0.70); }
 
 /* ── Audio pills (ghost on gradient) ─────────────────── */
 
@@ -1106,28 +1193,60 @@ a.tab-btn { text-decoration: none; }
 }
 .more-btn:hover { background: rgba(255,255,255,0.28); }
 
-.action-btn {
-  padding: 13px 26px;
-  border-radius: 999px;
+/* Small fullscreen toggle, top-right — same treatment on both touch (mobile)
+   and pointer (desktop) input since it's a plain click/tap target, no
+   gesture handling involved. Icon swaps between expand/compress based on
+   actual fullscreen state — see initFullscreenToggle() in theme.js. */
+.fullscreen-toggle-btn {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  right: calc(10px + env(safe-area-inset-right, 0px));
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.14);
   border: none;
-  background: white;
-  color: rgba(0,0,0,0.75);
-  font-family: inherit;
-  font-size: 0.88rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  color: rgba(255,255,255,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.2s, background 0.2s;
+  z-index: 95;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   -webkit-tap-highlight-color: transparent;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  transition: background 0.2s, transform 0.15s;
 }
-.action-btn:hover:not(:disabled) { transform: scale(1.03); }
+.fullscreen-toggle-btn:hover { background: rgba(255,255,255,0.24); }
+.fullscreen-toggle-btn:active { transform: scale(0.90); }
+
+/* Plain text pill — no icon, no colour fill. A thin outline, filled only
+   with a light frosted blur, so it reads as an understated action rather
+   than a loud button. Disabled state just dims further, no separate style
+   needed since there's no fill to remove. */
+.action-btn {
+  padding: 13px 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(255,255,255,0.92);
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.2s, border-color 0.2s, background 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.action-btn:hover:not(:disabled) { transform: scale(1.03); background: rgba(255,255,255,0.14); }
 .action-btn:active:not(:disabled) { transform: scale(0.97); }
 .action-btn:disabled {
-  background: rgba(255,255,255,0.25);
-  color: rgba(255,255,255,0.35);
+  border-color: rgba(255,255,255,0.18);
+  background: transparent;
+  color: rgba(255,255,255,0.32);
   cursor: not-allowed;
-  box-shadow: none;
 }
 
 /* Override old #upload-button — keep it hidden, proxy button handles the UI */
@@ -1413,6 +1532,16 @@ a.tab-btn { text-decoration: none; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* A two-finger pinch where each finger lands on a DIFFERENT element (one on
+     the word cloud, one on a gap between controls that lacked its own
+     touch-action:none) could fall back to the browser's native page zoom for
+     the whole gesture — that's what a huge, out-of-control zoomed letter
+     bleeding in from elsewhere on the page is. Locking the entire explore
+     screen down means there's no touch point left anywhere on it that native
+     zoom could ever claim; every gesture here is handled by our own JS. This
+     panel has no native scrolling of its own to preserve (children are laid
+     out by flex, not overflow), so there's nothing to lose. */
+  touch-action: none;
 }
 
 /* ── Word cloud ──────────────────────────────────────── */
@@ -1424,6 +1553,13 @@ a.tab-btn { text-decoration: none; }
   min-height: 0;
   /* push word area below the tab bar without creating a hard background edge */
   padding-top: calc(52px + env(safe-area-inset-top, 0px));
+  /* Without this, the browser waits to see if a touch becomes a native
+     scroll/pinch-zoom gesture before handing it to our pointer-event pinch/
+     pan/drag logic below — on mobile that meant zoom, pan, AND dragging a
+     word to reposition it either didn't fire at all or fought the page's
+     own scrolling. Claiming the gesture entirely for our own JS is what
+     makes all three actually work on touch, not just mouse. */
+  touch-action: none;
 }
 
 /* Fluid orbs — fixed so they fill the whole screen and bleed
@@ -1478,7 +1614,34 @@ a.tab-btn { text-decoration: none; }
   position: absolute;
   inset: 0;
   transform-origin: center center;
-  will-change: transform;
+  /* No will-change:transform here on purpose — it was promoting this
+     subtree to a cached GPU bitmap layer, which the browser then scales as
+     a raster texture instead of re-rendering the text glyphs at each new
+     effective size. Since every .explore-word already counter-scales
+     against --zoom to cancel this element's own scale out, the NET size on
+     screen never actually changes — but the cached bitmap was still being
+     stretched/resampled during the zoom gesture, which is what read as
+     blurry text. Removing it costs a little repaint performance during an
+     active pinch, but keeps text genuinely sharp at any zoom level. */
+}
+
+/* .explore-cloud's own padding-top does NOT actually protect this area —
+   #explore-words is absolutely positioned with inset:0, which (per spec)
+   sizes against the padding BOX, so it ignores the parent's own padding and
+   starts right at the very top regardless. Once zoom/pan can reach every
+   corner of the cloud (see the pan-range fix above), word text can slide
+   right up under the tab bar, which has no background of its own. This scrim
+   sits above the word layer and fades the zone out before it gets there —
+   keeps the original "no hard edge" softness while actually guaranteeing no
+   overlap, rather than relying on padding that was never doing anything.  */
+.explore-cloud::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: calc(64px + env(safe-area-inset-top, 0px));
+  background: linear-gradient(to bottom, rgba(6,8,12,0.85) 0%, rgba(6,8,12,0.55) 55%, transparent 100%);
+  pointer-events: none;
+  z-index: 3;
 }
 
 .explore-hint {
@@ -1545,33 +1708,59 @@ a.tab-btn { text-decoration: none; }
 /* Live "you are here" marker mirroring the 3D viewer's camera. Lives inside
    #explore-words so it pans/zooms with the memory words and shares their
    coordinate space. Zero-size box: children are placed relative to its origin
-   (the exact map point), and rotate() spins the view cone around that point. */
+   (the exact map point), and rotate() spins the ring+dot around that point to
+   show heading. Ring-with-a-bright-leading-edge language, same family as the
+   app's loading spinner (.gen-mark-simple/.gen-dot). Opacity is driven from
+   JS (_pollCameraState) so it fades away when zoomed far out and comes up
+   to full glow once zoomed in enough to actually navigate by. */
 .map-camera {
   position: absolute;
   width: 0; height: 0;
   pointer-events: none;
   z-index: 2;
+  opacity: 0;
   /* Only smooth position, NOT rotation: the heading (a CSS rotate in degrees)
      wraps from +180 to -180 as the view crosses straight-ahead, and animating
-     that jump makes the arrow spin ~360° — which reads as a random 180 flip.
+     that jump makes the marker spin ~360° — which reads as a random 180 flip.
      Snapping the rotation instantly avoids it. */
-  transition: left 0.18s linear, top 0.18s linear;
+  transition: left 0.18s linear, top 0.18s linear, opacity 0.25s ease;
 }
-.map-camera-cone {
+.map-camera-ring {
   position: absolute;
-  left: -26px; top: -52px;
-  width: 0; height: 0;
-  border-left: 26px solid transparent;
-  border-right: 26px solid transparent;
-  border-top: 52px solid rgba(130,205,255,0.16); /* apex at origin, fans "forward" */
+  left: -16px; top: -16px;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 3px solid rgba(160,195,215,0.40);
+  border-top-color: rgba(210,235,255,1);
+  box-shadow: 0 0 10px 2px rgba(160,205,235,0.45);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .map-camera-dot {
   position: absolute;
-  left: -5px; top: -5px;
+  left: -5px; top: -21px; /* sits right on the ring's bright edge */
   width: 10px; height: 10px;
   border-radius: 50%;
-  background: rgba(150,215,255,0.95);
-  box-shadow: 0 0 10px 3px rgba(130,205,255,0.7);
+  background: rgba(210,235,255,1);
+  box-shadow: 0 0 8px 2px rgba(160,205,235,0.55);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+/* Touching a memory word: a fixed warm gold, not the page's random accent
+   colour — the accent can land on almost any hue (see the palette in
+   presentation/index.html's twin), and on some loads it matches the panel
+   background closely enough to make the highlight disappear entirely. Gold
+   plus a dark halo behind it reads against any background this app uses. */
+.map-camera.touching .map-camera-ring {
+  border-color: rgba(255,196,92,0.65);
+  border-top-color: rgb(255,196,92);
+  box-shadow: 0 0 16px 4px rgba(255,196,92,0.55), 0 0 3px 2px rgba(11,11,13,0.6);
+}
+.map-camera.touching .map-camera-dot {
+  background: rgb(255,196,92);
+  box-shadow: 0 0 14px 4px rgba(255,196,92,0.6), 0 0 3px 2px rgba(11,11,13,0.6);
+}
+.explore-word.cam-touching {
+  color: rgb(255,196,92);
+  text-shadow: 0 0 10px rgba(255,196,92,0.55), 0 1px 3px rgba(11,11,13,0.85);
 }
 .explore-word.dragging {
   color: rgba(255,255,255,0.88);
@@ -1584,56 +1773,63 @@ a.tab-btn { text-decoration: none; }
 .explore-timeline {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
-  padding: 4px 20px 6px;
+  padding: 4px 20px 10px;
 }
 .tl-yr {
-  font-size: 0.56rem;
-  font-weight: 700;
-  letter-spacing: 0.10em;
-  color: rgba(255,255,255,0.28);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.55);
   min-width: 38px;
   text-align: center;
   text-transform: uppercase;
+  padding-bottom: 9px; /* baseline-aligns with the track, not the histogram above it */
 }
 .tl-yr-right { text-align: right; }
 
-/* Dual-range track */
+/* Track: a density histogram of memories per decade sitting right on top of
+   the range bar, so the control shows WHEN memories cluster instead of being
+   a plain featureless bar — genuinely informative, not just redecorated. */
 .tl-track {
   flex: 1;
   position: relative;
-  height: 18px;
+  height: 34px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
 }
-.tl-track::before {
-  content: "";
+.tl-hist {
   position: absolute;
-  inset: 0 0;
-  top: 50%;
-  height: 2px;
-  margin-top: -1px;
-  background: rgba(255,255,255,0.12);
-  border-radius: 2px;
+  left: 0; right: 0;
+  bottom: 10px;
+  height: 24px;
   pointer-events: none;
+}
+.tl-hist-bar {
+  position: absolute;
+  bottom: 0;
+  background: linear-gradient(to top, rgba(var(--accent-pick, 130,190,255), 0.16), rgba(var(--accent-pick, 130,190,255), 0.38));
+  border-radius: 2px 2px 0 0;
+  transition: opacity 0.25s;
 }
 .tl-fill {
   position: absolute;
-  top: 50%;
+  bottom: 9px;
   height: 2px;
-  margin-top: -1px;
-  background: rgba(255,255,255,0.55);
+  background: linear-gradient(to right, rgba(var(--accent-pick, 130,190,255), 0.9), rgba(var(--accent-pick, 130,190,255), 0.55));
+  box-shadow: 0 0 8px 0 rgba(var(--accent-pick, 130,190,255), 0.5);
   border-radius: 2px;
   pointer-events: none;
   z-index: 1;
 }
 .tl-slider {
   position: absolute;
+  bottom: 0;
   width: 100%;
   -webkit-appearance: none;
   appearance: none;
-  height: 2px;
+  height: 18px;
   background: transparent;
   outline: none;
   cursor: pointer;
@@ -1641,24 +1837,27 @@ a.tab-btn { text-decoration: none; }
 }
 .tl-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.82);
+  background: #fff;
+  border: 2px solid rgba(var(--accent-pick, 130,190,255), 0.9);
+  box-shadow: 0 0 10px 1px rgba(var(--accent-pick, 130,190,255), 0.55);
   cursor: pointer;
   pointer-events: all;
-  transition: background 0.2s, transform 0.15s;
+  transition: transform 0.15s;
   position: relative;
   z-index: 2;
 }
 .tl-slider::-webkit-slider-thumb:hover,
-.tl-slider:active::-webkit-slider-thumb { background: #fff; transform: scale(1.2); }
+.tl-slider:active::-webkit-slider-thumb { transform: scale(1.2); }
 .tl-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border: none;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.82);
+  background: #fff;
+  border: 2px solid rgba(var(--accent-pick, 130,190,255), 0.9);
+  box-shadow: 0 0 10px 1px rgba(var(--accent-pick, 130,190,255), 0.55);
   cursor: pointer;
   pointer-events: all;
 }
@@ -1682,12 +1881,23 @@ a.tab-btn { text-decoration: none; }
   width: 100%;
 }
 
-/* Rings: side by side, no knob dot */
+/* Rings: side by side. A bigger, bright thumb that actually tracks the touch
+   — like a game controller's analog stick — rather than a static dot, so the
+   circle reads as a real remote instead of decoration. */
 .explore-controls .stick-ring {
   width: clamp(96px, 28vw, 120px);
   height: clamp(96px, 28vw, 120px);
 }
-.explore-controls .stick-knob { opacity: 0; }
+.explore-controls .stick-knob {
+  width: 22px;
+  height: 22px;
+  background: rgba(255,255,255,0.92);
+}
+.explore-controls .stick-center-dot {
+  width: 3px;
+  height: 3px;
+  background: rgba(255,255,255,0.16);
+}
 
 /* Middle column: icon buttons stacked above ALT */
 .explore-mid-col {

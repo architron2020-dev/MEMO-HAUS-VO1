@@ -121,6 +121,36 @@ def _assign_free_position(scene_id: str) -> dict:
         return chosen
 
 
+def _resolve_no_overlap(scene_id: str, x: float, y: float) -> dict:
+    """Push a manually-dragged drop point away from any other scene sitting
+    within _POS_MIN_DIST of it — same minimum spacing new memories already
+    get auto-placed with (_assign_free_position above), just applied to a
+    drag's requested spot instead of a fresh spiral search. Without this, two
+    memories dragged onto each other would sit exactly on top of one another
+    on the map (unreadable, untappable) and as two literally overlapping
+    splats in the 3D viewer, since the viewer places every scene at exactly
+    whatever position is stored here. Deliberately UNCLAMPED past that — no
+    bound on x_pct/y_pct themselves, matching the map's "compose anywhere"
+    canvas — this only ever pushes a point directly away from a conflicting
+    neighbour, never back toward the centre."""
+    others = [p for sid, p in _scene_positions.items() if sid != scene_id]
+    for _ in range(8):  # a few relaxation passes in case more than one neighbour conflicts
+        conflict = next(
+            (p for p in others
+             if (x - p["x_pct"]) ** 2 + (y - p["y_pct"]) ** 2 < _POS_MIN_DIST ** 2),
+            None,
+        )
+        if conflict is None:
+            break
+        dx, dy = x - conflict["x_pct"], y - conflict["y_pct"]
+        dist = math.hypot(dx, dy)
+        if dist < 1e-6:  # exactly coincident — nudge in an arbitrary direction first
+            dx, dy, dist = 1.0, 0.0, 1.0
+        x = conflict["x_pct"] + dx / dist * _POS_MIN_DIST
+        y = conflict["y_pct"] + dy / dist * _POS_MIN_DIST
+    return {"x_pct": x, "y_pct": y}
+
+
 # Latest 3D viewer camera pose, so the map can draw where the viewer is
 # looking — also carries which memory is currently focused (by a click OR by
 # dwelling up to one via navigation), so the mobile app's own map can
@@ -337,9 +367,10 @@ def get_navigate() -> dict:
 @app.post("/api/scene-position")
 def set_scene_position(payload: ScenePositionPayload) -> dict:
     with _positions_lock:
-        _scene_positions[payload.scene_id] = {"x_pct": payload.x_pct, "y_pct": payload.y_pct}
+        resolved = _resolve_no_overlap(payload.scene_id, payload.x_pct, payload.y_pct)
+        _scene_positions[payload.scene_id] = resolved
         _save_positions()
-    return {"ok": True}
+    return {"ok": True, **resolved}
 
 
 @app.get("/api/scene-positions")
@@ -387,6 +418,18 @@ def delete_scene(scene_id: str) -> dict:
     scene = storage.delete_scene(scene_id)
     if scene is None:
         raise HTTPException(status_code=404, detail="Scene not found")
+
+    global _selected_scene_id, _world_selected_ids
+    with _positions_lock:
+        if _scene_positions.pop(scene_id, None) is not None:
+            _save_positions()
+    if scene_id in _world_selected_ids:
+        _world_selected_ids = [sid for sid in _world_selected_ids if sid != scene_id]
+    if _selected_scene_id == scene_id:
+        _selected_scene_id = None
+    if _camera_state.get("focused_scene_id") == scene_id:
+        _camera_state["focused_scene_id"] = None
+
     LOGGER.info("Deleted scene %s (and its files)", scene_id)
     return {"deleted": scene_id}
 
