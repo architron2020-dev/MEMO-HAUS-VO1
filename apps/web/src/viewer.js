@@ -244,15 +244,7 @@ const GROUND_SPAN = 640;   // world units across the full unit-square ground map
 const GROUND_Y    = 0;     // everything sits on the floor plane
 
 function pctToWorld(p) {
-  // Clamp to the unit square before mapping onto the ground plane. Positions are
-  // meant to be 0..1 fractions, but stale/dragged data can carry values well
-  // outside that (e.g. y_pct = -10 or 3.3). Unclamped, those land scenes
-  // thousands of units off across the 640-unit plane, so the viewer only ever
-  // frames the one nearest the camera and every other memory looks "gone". The
-  // clamp keeps every memory on the visible ground map no matter the input.
-  const x = Math.min(1, Math.max(0, p.x_pct));
-  const y = Math.min(1, Math.max(0, p.y_pct));
-  return [(x - 0.5) * GROUND_SPAN, GROUND_Y, (y - 0.5) * GROUND_SPAN];
+  return [(p.x_pct - 0.5) * GROUND_SPAN, GROUND_Y, (p.y_pct - 0.5) * GROUND_SPAN];
 }
 
 async function fetchServerPositions() {
