@@ -2471,12 +2471,31 @@ const REMOTE_LOOK_SPEED_MULT = 0.55;
 
 // ── Remote navigation from mobile ─────────────────────────────────────────
 let _remoteNav = { move_x:0, move_z:0, move_y:0, turn_x:0, turn_y:0, gyro:false, gyro_yaw:null, gyro_pitch:null, ts:0 };
+// When we last received a *changed* nav payload, measured by the viewer's OWN
+// monotonic clock (performance.now). Recency is judged against this — never
+// against the server's wall-clock `ts` — so a clock offset between the backend
+// and this display machine can't silently freeze remote navigation. (The old
+// `Date.now() - ts` gate compared two different machines' clocks; any skew
+// >600ms made every joystick/gyro input look "stale" and get dropped.)
+let _remoteNavRecvAt = 0;
 
 (async function _pollRemoteNav() {
+  let lastTs = null;
   while (true) {
     try {
       const r = await fetch("/api/navigate", { cache: "no-store" });
-      if (r.ok) _remoteNav = await r.json();
+      if (r.ok) {
+        const nav = await r.json();
+        // A changed server timestamp means the phone just sent fresh input —
+        // stamp its arrival with THIS machine's clock. Skip the first
+        // observation so a stale nav state left on the backend from a previous
+        // session can't trigger a one-off camera jump when the viewer loads.
+        if (nav.ts !== lastTs) {
+          if (lastTs !== null) _remoteNavRecvAt = performance.now();
+          lastTs = nav.ts;
+        }
+        _remoteNav = nav;
+      }
     } catch {}
     await new Promise(res => setTimeout(res, 50));
   }
@@ -2591,7 +2610,7 @@ function flyLoop() {
   // Apply remote mobile navigation (joystick / gyro from mobile app)
   {
     const rn = _remoteNav;
-    const isRecent = rn.ts > 0 && (Date.now() - rn.ts < 600);
+    const isRecent = _remoteNavRecvAt > 0 && (performance.now() - _remoteNavRecvAt < 600);
     if (isRecent && viewer) {
       const cam = viewer.camera;
       if (cam) {
