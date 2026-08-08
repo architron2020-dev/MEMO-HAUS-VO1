@@ -108,9 +108,18 @@ function stopAllAudio() {
   sceneAudioEl.pause();
 }
 
+let _audioRequestId = 0;
+
 async function playSceneAudio(scene, worldPos) {
   if (!scene.audio_url) return;
   stopSceneAudio(scene.id);
+
+  // Fetching/decoding below is async, so a fast scene switch can leave this
+  // call still in flight after a newer playSceneAudio() has already started —
+  // stopAllAudio() can't cancel it because it isn't in _activeSources yet.
+  // Without this guard the stale fetch finishes and starts playing anyway,
+  // producing "wrong/previous scene's audio" on quick switches.
+  const requestId = ++_audioRequestId;
 
   const ctx = getAudioCtx();
   // Never un-suspend a context the user muted — the source below still gets
@@ -120,6 +129,7 @@ async function playSceneAudio(scene, worldPos) {
 
   const buf = await _fetchAudioBuffer(scene.audio_url);
   if (!buf) return;
+  if (requestId !== _audioRequestId) return; // superseded by a later scene switch
 
   // GainNode — distance-based volume, driven per-frame by updateSpatialAudio().
   const gainNode = ctx.createGain();
