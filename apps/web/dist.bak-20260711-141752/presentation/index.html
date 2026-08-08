@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Memo-Haus: Presentation</title>
+    <link rel="icon" id="pres-favicon" type="image/svg+xml" href="" />
+    <link rel="stylesheet" href="style.css" />
+    <script>
+      // Same random-on-every-load accent system as the main app, applied
+      // here independently. This page has no build step and no shared
+      // state with apps/web, it just reuses the same idea.
+      (function () {
+        var palette = [[31,46,110], [0,122,61], [242,169,0], [212,42,28], [15,76,129], [255,111,97], [95,75,139], [136,176,75], [187,38,73], [255,159,124], [102,103,171], [149,82,81], [0,128,128], [212,160,23], [233,30,99], [180,160,220], [204,85,0], [34,87,59]];
+        var rgb = palette[Math.floor(Math.random() * palette.length)];
+        document.documentElement.style.setProperty("--accent-pick", rgb.join(","));
+
+        // The tab icon is generated fresh here too, in this load's colour —
+        // a static file can't read the CSS variable, so it's built as an
+        // inline data URI instead, same trick the main app uses.
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+          + '<circle cx="16" cy="16" r="15" fill="rgb(' + rgb.join(",") + ')"/>'
+          + '<circle cx="16" cy="16" r="5" fill="#fff"/></svg>';
+        document.getElementById("pres-favicon").href = "data:image/svg+xml," + encodeURIComponent(svg);
+      })();
+    </script>
+  </head>
+  <body class="pres-body">
+    <!-- Fluid orb background — same animation system as mobile app -->
+    <div id="pres-fluid-bg" aria-hidden="true">
+      <div class="pres-orb pres-orb-a"></div>
+      <div class="pres-orb pres-orb-b"></div>
+      <div class="pres-orb pres-orb-c"></div>
+      <div class="pres-orb pres-orb-d"></div>
+      <div class="pres-orb pres-orb-e"></div>
+      <div class="pres-orb pres-orb-f"></div>
+    </div>
+
+    <!-- Custom cursor, same flat filled-circle-plus-dot mark as the main app -->
+    <div id="cursor-reticle" class="cursor-reticle">
+      <span class="cursor-ring"></span>
+      <span class="cursor-dot"></span>
+    </div>
+
+    <nav class="pres-nav">
+      <span class="pres-nav-links">
+        <a href="#problem">Problem</a>
+        <a href="#origin">Origin</a>
+        <a href="#concept">Concept</a>
+        <a href="#flow">Flow</a>
+        <a href="#voice">Voice</a>
+        <a href="#solution">Identity</a>
+        <a href="#tech">Tech</a>
+        <a href="#monorepo">App</a>
+        <a href="#site">Site</a>
+        <a href="#pavilion">Pavilion</a>
+        <a href="#navigation">Navigation</a>
+        <a href="#mockup">Mockup</a>
+        <a href="#demo">Demo</a>
+      </span>
+    </nav>
+
+    <div class="pres-dots" id="pres-dots"></div>
+
+    <main id="pres-deck" class="pres-deck">
+
+      <!-- 1. HERO -->
+      <section class="pres-slide pres-hero" id="hero">
+        <div class="pres-hero-top">
+          <svg class="pres-logo" viewBox="0 0 200 108" role="img" aria-label="Memo-Haus">
+            <g transform="translate(100,32)">
+              <ellipse rx="26" ry="11" fill="none" style="stroke: rgb(var(--accent-pick))" stroke-width="1.6" transform="rotate(-18)"/>
+              <circle r="18" fill="none" style="stroke: rgb(var(--accent-pick))" stroke-width="1.6"/>
+              <g class="pres-logo-orbit">
+                <line x1="-18" y1="0" x2="-24" y2="0" style="stroke: rgb(var(--accent-pick))" stroke-width="1.8"/>
+                <line x1="18" y1="0" x2="24" y2="0" style="stroke: rgb(var(--accent-pick))" stroke-width="1.8"/>
+              </g>
+              <circle r="3.5" style="fill: rgb(var(--accent-pick))"/>
+              <circle r="1.4" cx="-0.7" cy="-0.7" fill="#fff"/>
+            </g>
+          </svg>
+          <h1 class="pres-hero-title pres-anim">Memo<br />Haus</h1>
+          <p class="pres-hero-tag pres-anim">From Archive To Participatory Experience</p>
+          <p class="pres-hero-sub pres-anim">A participatory, time-layered spatial memory archive for Wolfsburg.</p>
+          <p class="pres-hero-credit pres-anim">
+            Parthasarathy Muralidharan, M.Sc IUDD, Summer Semester 2026<br />
+            Bauhaus-Universität Weimar, Weimar, Germany<br />
+            Prompt City, Wolfsburg Urban Vision
+          </p>
+        </div>
+        <div class="pres-hero-bottom">
+          <!-- A little 2D loop, told as a clear sequence: a photo on the
+               left holds a memory, the boy walks up and a glowing memory
+               pops out of it, he carries it across, then it drops into the
+               bottle on the right and the cycle resets. The boy/photo/
+               bottle stay a neutral white so they're always legible against
+               whichever colour this load picked; the orb (the memory itself)
+               glows in that adaptive colour. -->
+          <div class="memory-chase">
+            <svg class="memory-photo" viewBox="0 0 50 40">
+              <rect x="2" y="2" width="46" height="36" rx="3"/>
+              <circle cx="15" cy="13" r="4"/>
+              <path d="M6 30 L18 18 L26 26 L34 16 L44 30 Z"/>
+            </svg>
+            <div class="memory-orb"></div>
+            <svg class="memory-boy" viewBox="0 0 60 80">
+              <circle class="boy-head" cx="30" cy="11" r="8"/>
+              <line x1="30" y1="19" x2="30" y2="48"/>
+              <line class="boy-arm-l" x1="30" y1="26" x2="16" y2="38"/>
+              <line class="boy-arm-r" x1="30" y1="26" x2="46" y2="16"/>
+              <line class="boy-leg-l" x1="30" y1="48" x2="18" y2="74"/>
+              <line class="boy-leg-r" x1="30" y1="48" x2="42" y2="74"/>
+            </svg>
+            <svg class="memory-bottle" viewBox="0 0 40 70">
+              <path d="M14 5 H26 V17 Q31 22 31 30 V58 Q31 65 24 65 H16 Q9 65 9 58 V30 Q9 22 14 17 Z"/>
+              <rect class="memory-cap" x="12" y="-4" width="16" height="9" rx="2"/>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. THE PROBLEM -->
+      <section class="pres-slide" id="problem">
+        <p class="pres-kicker pres-anim">The Problem</p>
+        <h2 class="pres-h2 pres-anim">A visible image. A hidden identity.</h2>
+        <div class="pres-2col">
+          <div class="pres-2col-text">
+            <p class="pres-body-text pres-anim">
+              Wolfsburg is known worldwide for Volkswagen, mobility, and modern planning. But people have
+              lived ordinary, meaningful lives here for generations: arrivals, work, childhoods, family,
+              waiting, walking. That side rarely becomes part of the city's visible identity.
+            </p>
+            <div class="pres-contrast pres-anim">
+              <div class="pres-contrast-side pres-contrast-official">
+                <div class="pres-contrast-icons">
+                  <svg viewBox="0 0 24 24" class="contrast-icon"><path d="M3 13l1.5-4.5A2 2 0 0 1 6.4 7h11.2a2 2 0 0 1 1.9 1.5L21 13v6a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H6v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><circle cx="6.5" cy="16.5" r="1.5"/><circle cx="17.5" cy="16.5" r="1.5"/></svg>
+                  <svg viewBox="0 0 24 24" class="contrast-icon"><path d="M3 21V10l9-6 9 6v11h-6v-7H9v7z"/></svg>
+                </div>
+                <span class="pres-contrast-label">Official Image</span>
+                <span class="pres-contrast-desc">Volkswagen, factories, cars, mobility, planning</span>
+              </div>
+              <div class="pres-contrast-side pres-contrast-hidden">
+                <div class="pres-contrast-icons">
+                  <svg viewBox="0 0 24 24" class="contrast-icon"><circle cx="12" cy="7" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>
+                  <svg viewBox="0 0 24 24" class="contrast-icon"><path d="M12 21s-7-4.6-9.5-9A5.5 5.5 0 0 1 12 5.5 5.5 5.5 0 0 1 21.5 12c-2.5 4.4-9.5 9-9.5 9z"/></svg>
+                </div>
+                <span class="pres-contrast-label">Hidden Everyday Identity</span>
+                <span class="pres-contrast-desc">Arrival, work, childhood, family, waiting, public life</span>
+              </div>
+            </div>
+            <p class="pres-body-text pres-anim pres-body-text-tight">
+              Wolfsburg's identity needs to grow from an industrial image into a living one.
+            </p>
+          </div>
+          <div class="pres-2col-visual">
+            <div class="pres-photo-slider pres-anim" id="problem-slider">
+              <figure class="photo-slide active"><img src="assets/city/factory-1.jpg" alt="Volkswagen factory chimneys" /><figcaption>The Volkswagen factory</figcaption></figure>
+              <figure class="photo-slide"><img src="assets/city/factory-2.jpg" alt="Factory view from Phaeno" /><figcaption>The factory, seen from Phaeno</figcaption></figure>
+              <figure class="photo-slide"><img src="assets/city/old-1.jpg" alt="Porschestraße" /><figcaption>Porschestraße</figcaption></figure>
+              <figure class="photo-slide"><img src="assets/city/old-2.jpg" alt="Porschestraße" /><figcaption>Porschestraße</figcaption></figure>
+              <figure class="photo-slide"><img src="assets/city/old-3.jpg" alt="A historic Beetle at Autostadt" /><figcaption>A historic Beetle, Autostadt</figcaption></figure>
+              <figure class="photo-slide"><img src="assets/city/city-1.jpg" alt="Hauptbahnhof station" /><figcaption>Hauptbahnhof, the train station</figcaption></figure>
+              <figure class="photo-slide"><img src="assets/city/city-2.jpg" alt="Porschestraße pedestrian street" /><figcaption>Porschestraße, everyday life</figcaption></figure>
+              <figure class="photo-slide"><img src="assets/city/city-3.jpg" alt="Wolfsburg at sunset" /><figcaption>Wolfsburg at sunset</figcaption></figure>
+              <div class="photo-dots">
+                <span class="photo-dot active"></span><span class="photo-dot"></span><span class="photo-dot"></span><span class="photo-dot"></span>
+                <span class="photo-dot"></span><span class="photo-dot"></span><span class="photo-dot"></span><span class="photo-dot"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. ORIGIN: BOTTLING MEMORIES -->
+      <section class="pres-slide" id="origin">
+        <p class="pres-kicker pres-anim">Where The Idea Started</p>
+        <h2 class="pres-h2 pres-anim">Bottling Memories.</h2>
+        <div class="pres-2col">
+          <div class="pres-2col-text">
+            <p class="pres-body-text pres-anim">
+              The idea started with a bottle. Not as a nostalgic object, but as a simple example of
+              something that holds a fragment of a moment and keeps it from disappearing.
+            </p>
+            <p class="pres-body-text pres-anim">
+              Memo-Haus imagines the city the same way: a living archive that holds scattered memories,
+              photographs, voices, stories, routes, waiting moments, and everyday experiences that are
+              usually invisible in public space.
+            </p>
+            <p class="pres-body-text pres-anim">
+              These fragments are collected from people, anchored to specific locations in Wolfsburg, and
+              reconstructed as spatial 3D experiences, preserved like an archive, but experienced as part of
+              the city's shared identity.
+            </p>
+            <p class="pres-body-text pres-anim pres-body-text-tight">
+              Memo-Haus preserves scattered memories as a living spatial archive.
+            </p>
+          </div>
+          <div class="pres-2col-visual">
+            <div class="pres-jar-gallery pres-anim">
+              <figure class="pres-jar-shot">
+                <img src="assets/jar-illustrations.jpg" alt="Illustrated jars, each holding a small everyday memory" />
+                <figcaption>Every memory, its own jar</figcaption>
+              </figure>
+              <figure class="pres-jar-shot">
+                <img src="assets/jar-photo.png" alt="A mason jar holding a photo of a Wolfsburg street" />
+                <figcaption>A street in Wolfsburg, bottled</figcaption>
+              </figure>
+            </div>
+            <div class="pres-bottle-flow pres-anim">
+              <div class="bottle-flow-step">
+                <span class="bottle-flow-label">Bottle</span>
+                <span class="bottle-flow-desc">preserves fragments</span>
+              </div>
+              <span class="bottle-flow-arrow">↓</span>
+              <div class="bottle-flow-step">
+                <span class="bottle-flow-label">City</span>
+                <span class="bottle-flow-desc">holds lived memories</span>
+              </div>
+              <span class="bottle-flow-arrow">↓</span>
+              <div class="bottle-flow-step">
+                <span class="bottle-flow-label">Memo-Haus</span>
+                <span class="bottle-flow-desc">archives and experiences them spatially</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. CONCEPT -->
+      <section class="pres-slide" id="concept">
+        <p class="pres-kicker pres-anim">The Concept</p>
+        <h2 class="pres-h2 pres-anim">Memory becomes a living archive.</h2>
+        <div class="pres-concept-layout">
+          <div class="pres-concept-text">
+            <p class="pres-body-text pres-anim">
+              Memo-Haus collects the everyday memories of Wolfsburg: arrivals, work routines, childhoods,
+              family stories, waiting, walking, the ordinary moments usually missing from the city's
+              public image.
+            </p>
+            <p class="pres-body-text pres-anim">
+              Each photo, voice note, and story is tied to a place, a time, and a theme, then rebuilt as a
+              3D spatial memory using Gaussian splatting.
+            </p>
+            <p class="pres-body-text pres-anim">
+              Inside the pavilion, these reconstructions form a living archive that keeps growing and
+              branching as more memories are added, rather than a fixed collection.
+            </p>
+            <p class="pres-body-text pres-anim pres-body-text-tight">
+              Memo-Haus turns everyday memories into a spatial archive of Wolfsburg's lived identity.
+            </p>
+          </div>
+          <div class="pres-concept-diagram pres-anim">
+            <div class="concept-timeline">
+              <div class="concept-step"><span class="concept-step-num">01</span><span class="concept-step-label">Collect</span><span class="concept-step-desc">photos, voices, stories</span></div>
+              <div class="concept-step"><span class="concept-step-num">02</span><span class="concept-step-label">Anchor</span><span class="concept-step-desc">location, timeline, theme</span></div>
+              <div class="concept-step"><span class="concept-step-num">03</span><span class="concept-step-label">Reconstruct</span><span class="concept-step-desc">3D Gaussian splat memory</span></div>
+              <div class="concept-step"><span class="concept-step-num">04</span><span class="concept-step-label">Preserve</span><span class="concept-step-desc">living archive in the pavilion</span></div>
+            </div>
+            <div class="concept-before-after">
+              <figure class="concept-shot"><img src="assets/city/city-2.jpg" alt="An everyday photo of Porschestraße" /><figcaption>Everyday moment</figcaption></figure>
+              <span class="concept-shot-arrow">→</span>
+              <figure class="concept-shot"><img src="assets/app-viewer.png" alt="The reconstructed 3D memory in the viewer" /><figcaption>Living archive</figcaption></figure>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. FLOW -->
+      <section class="pres-slide" id="flow">
+        <p class="pres-kicker pres-anim">How It Works</p>
+        <h2 class="pres-h2 pres-anim">Scan. Share. Step inside.</h2>
+        <div class="pres-2col">
+          <div class="pres-2col-text">
+            <ol class="pres-steps">
+              <li class="pres-anim"><span class="pres-step-num">01</span><span class="pres-step-text">Scan a QR code on site with your phone</span></li>
+              <li class="pres-anim"><span class="pres-step-num">02</span><span class="pres-step-text">Upload a photo, and add a voice note or a short clip of music tied to that place</span></li>
+              <li class="pres-anim"><span class="pres-step-num">03</span><span class="pres-step-text">The backend reconstructs it into a 3D scene</span></li>
+              <li class="pres-anim"><span class="pres-step-num">04</span><span class="pres-step-text">It joins the public display, where particles gather, the memory forms, and dissolves once the next one is chosen</span></li>
+            </ol>
+          </div>
+          <div class="pres-2col-visual">
+            <div class="pres-flow-shots pres-anim">
+              <figure class="pres-flow-shot">
+                <img src="assets/app-mobile-new.png" alt="The mobile upload app" />
+                <figcaption>The mobile app, where a visitor uploads a photo</figcaption>
+              </figure>
+              <figure class="pres-flow-shot">
+                <img src="assets/app-viewer-new.png" alt="The constructed 3D viewer" />
+                <figcaption>The viewer, showing the reconstructed scene</figcaption>
+              </figure>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6b. VOICE & SOUND -->
+      <section class="pres-slide" id="voice">
+        <p class="pres-kicker pres-anim">Voice &amp; Sound</p>
+        <h2 class="pres-h2 pres-anim">A memory isn't just a picture.</h2>
+        <div class="pres-2col">
+          <div class="pres-2col-text">
+            <p class="pres-body-text pres-anim pres-body-text-tight">
+              Every upload can carry sound too: a voice recorded right there on site, or a piece of
+              music tied to that place and time, trimmed to the exact moment that matters.
+            </p>
+            <p class="pres-body-text pres-anim">
+              Record straight from the phone's microphone, or search for a track and pull up its
+              waveform: drag the two handles to crop it down to up to 60 seconds, preview the exact
+              clip, then attach it.
+            </p>
+            <p class="pres-body-text pres-anim">
+              In the pavilion, that sound becomes spatial. Only the memory you're standing in front of
+              plays out loud, fading in as you approach and back out as you leave. Everywhere else
+              stays quiet, so the space never turns into overlapping noise.
+            </p>
+          </div>
+          <div class="pres-2col-visual">
+            <div class="pres-nav-icons pres-anim">
+              <div class="nav-icon-cell">
+                <svg viewBox="0 0 24 24" class="nav-icon"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+                <span class="nav-icon-label">Record a Voice Note</span>
+                <span class="nav-icon-desc">straight from the phone's mic</span>
+              </div>
+              <div class="nav-icon-cell">
+                <svg viewBox="0 0 24 24" class="nav-icon"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="21" y2="21"/><path d="M9 10.5h3M10.5 9v3"/></svg>
+                <span class="nav-icon-label">Search a Track</span>
+                <span class="nav-icon-desc">find a song tied to the memory</span>
+              </div>
+              <div class="nav-icon-cell">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M2 12h2l1.5-5 2 10 2-14 2 9 1.5-4h9"/></svg>
+                <span class="nav-icon-label">Waveform Crop</span>
+                <span class="nav-icon-desc">drag to trim, up to 60 seconds</span>
+              </div>
+              <div class="nav-icon-cell">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/></svg>
+                <span class="nav-icon-label">Spatial Playback</span>
+                <span class="nav-icon-desc">fades in and out by distance</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- 7. SOLUTION / IDENTITY -->
+      <section class="pres-slide" id="solution">
+        <p class="pres-kicker pres-anim">Solving Wolfsburg's Identity Problem</p>
+        <h2 class="pres-h2 pres-anim">One industrial image. Many lived ones.</h2>
+        <div class="pres-2col">
+          <div class="pres-2col-text">
+            <p class="pres-body-text pres-anim">
+              Most people know Wolfsburg through Volkswagen, mobility, and modern planning. But underneath
+              that image are quieter memories that exist all over the city and almost never get
+              acknowledged: arriving for the first time, growing up here, starting a first job, waiting for
+              family, feeling lonely, or celebrating at a local festival.
+            </p>
+            <p class="pres-body-text pres-anim">
+              Memo-Haus ties real, contributed memories to exact locations and layers them across a timeline,
+              so a single place, the pavilion site at the start of Porschestraße, can show how its meaning
+              has shifted from one generation to the next. Put together, these scattered personal memories
+              form a shared spatial record, one that surfaces Wolfsburg's <strong>everyday lived
+              identity</strong> next to its industrial one, not instead of it, but alongside it.
+            </p>
+          </div>
+          <div class="pres-2col-visual">
+            <figure class="pres-single-shot">
+              <img src="assets/city/everyday-1.jpg" alt="Families at the Allerpark slide park" />
+              <figcaption>Wolfsburg's everyday lived identity</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8. TECH -->
+      <section class="pres-slide" id="tech">
+        <p class="pres-kicker pres-anim">Under The Hood</p>
+        <h2 class="pres-h2 pres-anim">What's actually running underneath.</h2>
+        <div class="pres-tags">
+          <button type="button" class="pres-tag pres-anim" data-desc="Turns a single photo into a 3D scene made of thousands of tiny coloured blobs that can be viewed from any angle.">Apple SHARP, Gaussian Splatting</button>
+          <button type="button" class="pres-tag pres-anim" data-desc="Renders those gaussian-splat scenes live in the browser over WebGL, via Three.js, which is actively maintained, GPU-sorted, and built to hold far more splats in view at once than the library it replaced.">Spark, Three.js Rendering</button>
+          <button type="button" class="pres-tag pres-anim" data-desc="Every new memory is auto-placed on the shared map with a golden-angle spiral, so it always lands in a free spot instead of overlapping an existing one.">Collision-Free Auto Placement</button>
+          <button type="button" class="pres-tag pres-anim" data-desc="Only the memory you're focused on plays out loud, fading continuously in and out with how close you are to it. Everything else stays quiet in the background.">Spatial Adaptive Audio</button>
+          <button type="button" class="pres-tag pres-anim" data-desc="A twin on-screen joystick to move and look around, walking up to a memory and lingering for a moment auto-focuses it, no tap needed, each interaction confirmed with haptic feedback.">Dwell-to-Focus Navigation</button>
+          <button type="button" class="pres-tag pres-anim" data-desc="The server that receives uploads, runs the 3D reconstruction, and stores the results.">FastAPI Python Backend</button>
+          <button type="button" class="pres-tag pres-anim" data-desc="The website itself, built with plain JavaScript, no React or other framework, so it stays lightweight.">Vanilla JS, No Framework</button>
+          <button type="button" class="pres-tag pres-anim" data-desc="Records a voice note straight from the browser's own microphone access, with no app install and no separate recorder needed. Just tap and speak, capped at 60 seconds.">MediaRecorder Voice Capture</button>
+          <button type="button" class="pres-tag pres-anim" data-desc="Decodes a recording or a searched-up track into a visible waveform, then lets you drag its two handles to trim it down to the exact moment before attaching it.">Web Audio Waveform Cropping</button>
+        </div>
+        <p class="pres-tag-desc" id="tech-desc"></p>
+      </section>
+
+      <!-- 9. MONOREPO -->
+      <section class="pres-slide" id="monorepo">
+        <p class="pres-kicker pres-anim">One Repo, Three Systems</p>
+        <h2 class="pres-h2 pres-anim">How it all fits together.</h2>
+        <p class="pres-body-text pres-anim">
+          A visitor uploads a photo. The backend reconstructs it into a 3D scene. The viewer shows it.
+          All three pieces live in one repository.
+        </p>
+        <div class="pres-repo-diagram pres-anim">
+          <div class="repo-node">
+            <span class="repo-node-path">apps/web</span>
+            <span class="repo-node-desc">upload, viewer, contribute, memories</span>
+          </div>
+          <div class="repo-link"><span class="repo-pulse"></span></div>
+          <div class="repo-node">
+            <span class="repo-node-path">apps/api</span>
+            <span class="repo-node-desc">FastAPI, scene storage, map placement, live camera state</span>
+          </div>
+          <div class="repo-link"><span class="repo-pulse" style="animation-delay: 0.6s;"></span></div>
+          <div class="repo-node">
+            <span class="repo-node-path">packages/ml-sharp</span>
+            <span class="repo-node-desc">Gaussian splat reconstruction</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10a. THE SITE -->
+      <section class="pres-slide" id="site">
+        <p class="pres-kicker pres-anim">The Site</p>
+        <h2 class="pres-h2 pres-anim">Right where the city already moves.</h2>
+        <div class="pres-2col">
+          <div class="pres-2col-text">
+            <p class="pres-body-text pres-anim">
+              The pavilion sits right at the start of Porschestraße, the city's main pedestrian street,
+              at the junction next to the central bus station (ZOB) and a short walk from the Hauptbahnhof.
+            </p>
+            <p class="pres-body-text pres-anim">
+              That position was chosen on purpose. Bus routes converge here, and commuters and shoppers
+              pass through it every day, so the site already carries more footfall than almost anywhere
+              else in Wolfsburg. The pavilion doesn't need to attract an audience; it just needs to meet
+              the one already passing through.
+            </p>
+            <p class="pres-body-text pres-anim">
+              It's also a threshold in a more pointed sense: this is the entrance to a street named after
+              Ferdinand Porsche, the symbolic edge of the city's industrial identity. Placing an
+              everyday-memory pavilion exactly there puts the hidden, lived side of Wolfsburg right at the
+              doorstep of the image that usually overshadows it.
+            </p>
+            <p class="pres-body-text pres-anim pres-body-text-tight">
+              High footfall, a real transit junction, and a symbolic threshold, all in one site.
+            </p>
+          </div>
+          <div class="pres-2col-visual">
+            <div class="pres-drawing-slider pres-anim" id="site-drawing-slider">
+              <figure class="drawing-slide active"><img src="assets/site.png" alt="Aerial map of the chosen site" /><figcaption>The site, at the junction by the central bus station (ZOB)</figcaption></figure>
+              <figure class="drawing-slide"><img src="assets/site-page-1.jpg" alt="Site drawing, page 1" /><figcaption>Site massing, at the Porschestraße junction</figcaption></figure>
+              <figure class="drawing-slide"><img src="assets/site-page-2.jpg" alt="Site drawing, page 2" /><figcaption>The pavilion in its urban context</figcaption></figure>
+              <figure class="drawing-slide"><img src="assets/site-page-3.jpg" alt="Site drawing, page 3" /><figcaption>The pavilion's mirrored facade, reflecting the trees around it</figcaption></figure>
+              <div class="drawing-dots">
+                <span class="drawing-dot active"></span><span class="drawing-dot"></span><span class="drawing-dot"></span><span class="drawing-dot"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10. PAVILION -->
+      <section class="pres-slide" id="pavilion">
+        <p class="pres-kicker pres-anim">The Pavilion</p>
+        <h2 class="pres-h2 pres-anim">Where memories come to life.</h2>
+        <div class="pres-2col">
+          <div class="pres-2col-text">
+            <p class="pres-body-text pres-anim">
+              Memo-Haus is built as a layered memory capsule. The outer shell is a 200mm thick, dark GFRC
+              wall with a blind-perforated surface, holes recessed rather than fully open, so the wall reads
+              as porous from outside while still blocking daylight. Its inner face is lined in matte black
+              acoustic panelling, forming a dark, protective threshold around the pavilion.
+            </p>
+            <p class="pres-body-text pres-anim">
+              Inside that shell, the corridor between the outer wall and the translucent display cylinder
+              is the first part of the experience. Visitors don't reach the memory field immediately; they
+              walk through a dim circular passage where fragments of the display glow faintly through the
+              inner screen's outer surface. The corridor slows them down, separates them from the city
+              outside, and prepares them for the memory chamber ahead.
+            </p>
+            <p class="pres-body-text pres-anim">
+              The inner cylinder itself is curved, laminated, translucent safety glass with an integrated
+              transparent LED mesh and an anti-glare diffusion film. It's the main display surface, showing
+              photos, text, particles, and Gaussian-splatted 3D memory scenes. Because it's translucent,
+              memories can be sensed from the corridor as soft traces, then experienced from inside as a
+              full spatial environment.
+            </p>
+            <p class="pres-body-text pres-anim">
+              At the centre, a steel service core wrapped in vertical timber cladding forms the tree-shaped
+              column, housing the media server, sensors, sound, lighting, and ventilation. Symbolically, the
+              tree roots the memories in Wolfsburg and branches them outward into the glowing display. It
+              also does the structural work of holding up the roof.
+            </p>
+            <p class="pres-body-text pres-anim">
+              The roof is a steel-framed canopy clad in dark fibre-cement, with a black acoustic underside.
+              It shades the interior, hides the technical systems above, and reinforces the pavilion's dark,
+              atmospheric character.
+            </p>
+            <p class="pres-body-text pres-anim">
+              If footfall at this first site proves the idea, the same pavilion doesn't have to stay a
+              one-off. Its cylindrical form is already close to a familiar piece of German street
+              furniture, the Litfaßsäule, advertising columns placed deliberately at the city's busiest
+              corners. Memo-Haus could spread the same way: a small family of these memory columns, each
+              one set down at a high-footfall point across Wolfsburg, rather than a single landmark
+              everyone has to travel to.
+            </p>
+          </div>
+          <div class="pres-2col-visual">
+            <div class="pres-drawing-slider pres-anim" id="pavilion-drawing-slider">
+              <figure class="drawing-slide active"><img src="assets/pavilion-a1.jpg" alt="Pavilion drawing A1" /><figcaption>Isometric massing, with figures for scale</figcaption></figure>
+              <figure class="drawing-slide"><img src="assets/pavilion-a2.jpg" alt="Pavilion drawing A2" /><figcaption>Front elevation, entrance and translucent core</figcaption></figure>
+              <figure class="drawing-slide"><img src="assets/pavilion-a3.jpg" alt="Pavilion drawing A3" /><figcaption>Exploded view: roof, walls, translucent core, base</figcaption></figure>
+              <figure class="drawing-slide"><img src="assets/pavilion-a4.jpg" alt="Pavilion drawing A4" /><figcaption>Plan view, roof removed</figcaption></figure>
+              <figure class="drawing-slide"><img src="assets/pavilion-a5.jpg" alt="Pavilion drawing A5" /><figcaption>Section through the pavilion</figcaption></figure>
+              <div class="drawing-dots">
+                <span class="drawing-dot active"></span><span class="drawing-dot"></span><span class="drawing-dot"></span>
+                <span class="drawing-dot"></span><span class="drawing-dot"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10ba. NAVIGATION -->
+      <section class="pres-slide" id="navigation">
+        <p class="pres-kicker pres-anim">Navigation</p>
+        <h2 class="pres-h2 pres-anim">Your phone is the remote.</h2>
+        <div class="pres-2col">
+          <div class="pres-2col-text">
+            <p class="pres-body-text pres-anim pres-body-text-tight">
+              Scan the QR code on the pavilion to open the mobile interface, no app install. From there
+              you can upload a memory of your own, or step into the shared 3D field and move through
+              everyone else's.
+            </p>
+            <p class="pres-body-text pres-anim">
+              <strong>Upload:</strong> drop in a photo, place it on the map, write a short story, and
+              optionally attach a voice note or a cropped clip of music, then it's rendered into a
+              gaussian-splat scene and added to the field.
+            </p>
+            <p class="pres-body-text pres-anim">
+              <strong>Move:</strong> a twin on-screen joystick, one to move, one to look around, each tap
+              and drag answered with haptic feedback. Walk close to a memory and linger for a moment and
+              it focuses on its own, no tap needed, and its story and sound come up with it.
+            </p>
+            <p class="pres-body-text pres-anim">
+              <strong>Adaptive audio:</strong> only the memory you're focused on plays out loud, and it
+              fades in and out continuously with how close you are. Everything else stays quiet in the
+              background as soft, drifting particles until you approach it.
+            </p>
+          </div>
+          <div class="pres-2col-visual">
+            <figure class="pres-nav-shot pres-anim">
+              <img src="assets/app-navigation.png" alt="The Explore tab: memory word map, timeline, and move/look joysticks" />
+              <figcaption>Explore: the shared memory map, timeline, and dual joysticks</figcaption>
+            </figure>
+            <div class="pres-nav-icons pres-anim">
+              <div class="nav-icon-cell">
+                <svg viewBox="0 0 24 24" class="nav-icon" fill="none"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="5.4" y="5.4" width="1.2" height="1.2" fill="rgb(var(--accent-pick))" stroke="none"/><rect x="17.4" y="5.4" width="1.2" height="1.2" fill="rgb(var(--accent-pick))" stroke="none"/><rect x="5.4" y="17.4" width="1.2" height="1.2" fill="rgb(var(--accent-pick))" stroke="none"/><rect x="15" y="15" width="2.5" height="2.5"/><rect x="18.5" y="15" width="2.5" height="2.5"/><rect x="15" y="18.5" width="2.5" height="2.5"/><rect x="18.5" y="18.5" width="2.5" height="2.5"/></svg>
+                <span class="nav-icon-label">Scan &amp; Upload</span>
+                <span class="nav-icon-desc">QR code opens the mobile app</span>
+              </div>
+              <div class="nav-icon-cell">
+                <svg viewBox="0 0 24 24" class="nav-icon"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+                <span class="nav-icon-label">Dual Joystick</span>
+                <span class="nav-icon-desc">move + look, with haptic touch</span>
+              </div>
+              <div class="nav-icon-cell">
+                <svg viewBox="0 0 24 24" class="nav-icon"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                <span class="nav-icon-label">Dwell to Focus</span>
+                <span class="nav-icon-desc">linger near a memory, it opens itself</span>
+              </div>
+              <div class="nav-icon-cell">
+                <svg viewBox="0 0 24 24" class="nav-icon"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/></svg>
+                <span class="nav-icon-label">Adaptive Audio</span>
+                <span class="nav-icon-desc">volume follows distance to focus</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10b. MOCKUP -->
+      <section class="pres-slide" id="mockup">
+        <p class="pres-kicker pres-anim">The Physical Mockup</p>
+        <h2 class="pres-h2 pres-anim">Testing the form before going digital.</h2>
+        <div class="pres-2col">
+          <div class="pres-2col-text">
+            <p class="pres-body-text pres-anim">
+              A small physical mockup tests the pavilion's shape, scale, and material feel before
+              committing to the final design, the curved walls, the entry sequence, how light moves through
+              the form, and how the space actually feels at human scale.
+            </p>
+            <p class="pres-body-text pres-anim">
+              It also tests the translucent cylinder itself: memories stay visible from inside while softly
+              glowing through to the outside, so passersby catch a hint of what's playing before they
+              step in.
+            </p>
+            <p class="pres-body-text pres-anim pres-body-text-tight">
+              A quick, simple bridge between the concept sketch and the digital pavilion.
+            </p>
+          </div>
+          <div class="pres-2col-visual">
+            <div class="pres-mockup-slider pres-anim" id="mockup-slider">
+              <div class="mockup-slide active">
+                <img src="assets/mockup-1.jpeg" alt="Physical mockup model of the pavilion" />
+              </div>
+              <div class="mockup-slide">
+                <img src="assets/mockup-2.jpeg" alt="Physical mockup model, alternate angle" />
+              </div>
+              <div class="mockup-slide">
+                <video src="assets/mockup-video.mp4" muted autoplay loop playsinline></video>
+              </div>
+              <div class="mockup-slide">
+                <video src="assets/mockup-video-2.mp4" muted autoplay loop playsinline></video>
+              </div>
+              <div class="mockup-dots">
+                <span class="mockup-dot active"></span>
+                <span class="mockup-dot"></span>
+                <span class="mockup-dot"></span>
+                <span class="mockup-dot"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11. DEMO -->
+      <section class="pres-slide" id="demo">
+        <p class="pres-kicker pres-anim">See It Live</p>
+        <h2 class="pres-h2 pres-anim">Try it yourself.</h2>
+        <div class="pres-demo-links">
+          <a href="/index.html" class="pres-demo-btn pres-anim">Share a Memory →</a>
+          <a href="/viewer.html" target="_blank" rel="noopener" class="pres-demo-btn pres-demo-btn-alt pres-anim">Open the Viewer →</a>
+        </div>
+      </section>
+
+      <!-- 12. THANK YOU -->
+      <section class="pres-slide pres-thanks" id="thanks">
+        <h2 class="pres-h2 pres-anim">Thank you for sharing your memories.</h2>
+      </section>
+
+    </main>
+
+    <script src="script.js"></script>
+    <script>
+      document.addEventListener("keydown", function(e) {
+        if (e.key === "f" || e.key === "F") {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(function(){});
+          } else {
+            document.exitFullscreen().catch(function(){});
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

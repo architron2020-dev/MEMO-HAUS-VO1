@@ -1,0 +1,44 @@
+# Memo-House — dedicated-domain Caddy config for ki-pc.
+# Serves the static Vite frontend build and reverse-proxies the FastAPI backend,
+# all same-origin with auto-TLS. This reuses the domain + Let's Encrypt cert that
+# the special-memory project used; run only ONE Caddy on this box at a time (see
+# deploy/README.md — stop special-memory's Caddy first, it also binds 80/443).
+
+ki-pc.architektur.uni-weimar.de {
+	# Cross-origin isolation: the Spark splat renderer sorts in a Web Worker using
+	# SharedArrayBuffer, which needs these headers. Same-origin assets satisfy COEP.
+	header {
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
+	}
+
+	# Backend: JSON API + the static asset mounts FastAPI serves
+	# (/outputs = splats, /uploads = source photos, /audio = voice notes,
+	# /stitched = panorama stitches). These must be `handle` blocks so the
+	# static `try_files` rewrite below cannot capture them first.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+	handle /outputs/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+	handle /uploads/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+	handle /audio/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+	handle /stitched/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+
+	# Static frontend (Vite multi-page build). Point root at the absolute path of
+	# apps/web/dist on ki-pc. Runs only for requests not matched by the proxies above.
+	handle {
+		root * "D:/Yegor/Github/MEMO-HAUS SUMMAERY-PARTHA/MEMO-HAUS-VO1/apps/web/dist"
+		# Serve the .html entry points directly: / -> index.html (upload page),
+		# /viewer -> viewer.html, /memories -> memories.html, /contribute -> contribute.html.
+		try_files {path} {path}.html {path}/index.html /index.html
+		file_server
+	}
+}

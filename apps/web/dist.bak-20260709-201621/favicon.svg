@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" fill="#000"/>
+  <g transform="translate(16,16)">
+    <!-- Orbital tilt ring -->
+    <ellipse rx="12" ry="5"
+      fill="none" stroke="#64c8ff" stroke-opacity="0.22" stroke-width="0.9"
+      transform="rotate(-18)"/>
+    <!-- Main circle -->
+    <circle r="8.5"
+      fill="none" stroke="#64c8ff" stroke-opacity="0.45" stroke-width="0.9"/>
+    <!-- Tick marks -->
+    <line x1="-8.5" y1="0" x2="-11" y2="0"
+      stroke="#64c8ff" stroke-opacity="0.65" stroke-width="0.9"/>
+    <line x1="8.5" y1="0" x2="11" y2="0"
+      stroke="#64c8ff" stroke-opacity="0.65" stroke-width="0.9"/>
+    <!-- Glow halo -->
+    <circle r="3.5" fill="#64c8ff" fill-opacity="0.10"/>
+    <!-- Core -->
+    <circle r="1.8" fill="#64c8ff" fill-opacity="0.95"/>
+    <circle r="0.7" cx="-0.4" cy="-0.4" fill="white" fill-opacity="0.85"/>
+  </g>
+</svg>
