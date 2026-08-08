@@ -169,7 +169,7 @@
   },
   {
     "id": "frauentorstra-e-weimar_2026_a-chill-walk-to-frauenpl_79ec75",
-    "name": "Frauentorstra\u00dfe, Weimar",
+    "name": "Frauentorstraße, Weimar",
     "author": "Partha",
     "ply_file": "frauentorstra-e-weimar_2026_a-chill-walk-to-frauenpl_79ec75.ply",
     "image_file": "frauentorstra-e-weimar_2026_a-chill-walk-to-frauenpl_79ec75.jpg",
@@ -433,7 +433,7 @@
   },
   {
     "id": "random-road-in-th-ringen_2026_stopping-on-the-road-to_65bbd5",
-    "name": "Random Road in Th\u00fcringen",
+    "name": "Random Road in Thüringen",
     "author": "Marlon",
     "ply_file": "random-road-in-th-ringen_2026_stopping-on-the-road-to_65bbd5.ply",
     "image_file": "random-road-in-th-ringen_2026_stopping-on-the-road-to_65bbd5.jpg",
@@ -572,6 +572,18 @@
     "created_at": 1783864684.5492866,
     "year": "",
     "story": "Yummy food, cool",
+    "cluster_id": "",
+    "audio_file": ""
+  },
+  {
+    "id": "uttarkhand_2026_my-friends-trip_ed3203",
+    "name": "Uttarkhand",
+    "author": "Partha",
+    "ply_file": "uttarkhand_2026_my-friends-trip_ed3203.ply",
+    "image_file": "uttarkhand_2026_my-friends-trip_ed3203.jpg",
+    "created_at": 1786218776.165365,
+    "year": "2026",
+    "story": "My friends trip",
     "cluster_id": "",
     "audio_file": ""
   }
