@@ -170,17 +170,20 @@ async function clearDraftFiles() {
 
 // ── Text field draft (localStorage) ──────────────────────────────────────
 
+// sessionStorage (not localStorage) so the draft only follows a refresh of
+// THIS tab — opening the app in a new tab starts blank instead of always
+// showing whatever was last typed anywhere.
 function saveDraft() {
   const draft = {
     name: nameInput.value, author: authorInput.value,
     year: yearInput.value, story:  storyInput.value,
     ts:   Date.now(),
   };
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
 }
 
 function clearDraft() {
-  try { localStorage.removeItem(DRAFT_KEY); } catch {}
+  try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
   clearDraftFiles();
 }
 
@@ -195,13 +198,18 @@ function scheduleDraftSave() {
 );
 
 // Restore on load — async so files come back from IndexedDB too.
+// sessionStorage is per-tab, so this only fires on a reload of the SAME tab
+// (e.g. an accidental refresh mid-upload) — a freshly opened tab has no
+// sessionStorage entry and starts blank, even if another tab has a draft.
 async function restoreDraft() {
   let hadText = false;
+  let hasSessionDraft = false;
   try {
-    const raw = localStorage.getItem(DRAFT_KEY);
+    const raw = sessionStorage.getItem(DRAFT_KEY);
     if (raw) {
       const d = JSON.parse(raw);
       if (d.ts && Date.now() - d.ts < 4 * 60 * 60 * 1000) {
+        hasSessionDraft = true;
         if (d.name)   { nameInput.value   = d.name;   dotName.classList.add("filled");   hadText = true; }
         if (d.author) { authorInput.value = d.author; dotAuthor.classList.add("filled"); hadText = true; }
         if (d.year)   { yearInput.value   = d.year;   dotYear.classList.add("filled");   hadText = true; }
@@ -215,7 +223,11 @@ async function restoreDraft() {
     }
   } catch {}
 
-  // Restore photos from IndexedDB.
+  // Photos live in IndexedDB, which (unlike sessionStorage) is shared across
+  // tabs — only pull them back for the same-tab-reload case above, otherwise
+  // a new tab would still inherit another tab's selected photos.
+  if (!hasSessionDraft) { clearDraftFiles(); return; }
+
   const restored = await loadDraftFiles();
   if (restored.length) {
     selectedFiles = restored;
@@ -228,11 +240,7 @@ async function restoreDraft() {
   }
 }
 
-// Draft restore disabled — the form should always open blank instead of
-// showing whatever was left over from a previous visit. Auto-save still
-// runs (scheduleDraftSave above) so re-enabling this call is all it'd take
-// to bring restoration back.
-clearDraft();
+restoreDraft();
 
 function escapeHtml(str) {
   const div = document.createElement("div");
