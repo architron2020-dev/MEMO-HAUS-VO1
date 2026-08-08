@@ -8,153 +8,259 @@
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
-    background: #0e1220;
-    color: #0b0b0d;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", "Inter", system-ui, sans-serif;
+    background: #dfdfdc;
+    color: #0a0a0a;
   }
+
   .page {
     width: 210mm;
     height: 297mm;
     position: relative;
     overflow: hidden;
-    background:
-      radial-gradient(ellipse 70% 45% at 15% 10%, rgba(28,118,224,0.55), transparent 60%),
-      radial-gradient(ellipse 60% 45% at 90% 20%, rgba(224,148,80,0.35), transparent 60%),
-      radial-gradient(ellipse 65% 55% at 80% 95%, rgba(48,155,238,0.40), transparent 60%),
-      radial-gradient(ellipse 55% 45% at 5% 90%, rgba(28,118,224,0.30), transparent 60%),
-      linear-gradient(160deg, #12162a 0%, #0e1220 55%, #0a0c16 100%);
-    color: #fff;
-    padding: 20mm 18mm;
+    background: #fff;
+    color: #0a0a0a;
+    padding: 14mm 16mm;
     display: flex;
     flex-direction: column;
+    break-after: page;
   }
+  .page:last-child { break-after: auto; }
 
-  /* ── Header ─────────────────────────────────────────── */
-  .header { display: flex; align-items: center; gap: 6mm; }
-  .logo { width: 20mm; height: auto; flex-shrink: 0; }
-  .brand-title { font-size: 9mm; font-weight: 800; letter-spacing: 1mm; line-height: 1; margin: 0; }
-  .brand-tag { font-size: 3.4mm; font-weight: 600; letter-spacing: 0.3mm; color: rgba(255,255,255,0.62); margin: 2mm 0 0; }
-
-  /* ── Headline ───────────────────────────────────────── */
-  .headline {
-    margin: 14mm 0 4mm;
-    font-size: 11mm;
-    font-weight: 800;
-    line-height: 1.08;
-    letter-spacing: -0.02em;
-    max-width: 150mm;
+  /* ── Meta row — small caps labels across the top, Swiss-poster style ── */
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6mm;
   }
-  .sub {
-    font-size: 4.4mm;
+  .meta-cell {
+    font-size: 2.6mm;
     font-weight: 600;
     line-height: 1.5;
-    color: rgba(255,255,255,0.70);
-    max-width: 140mm;
-    margin: 0 0 12mm;
+    letter-spacing: 0.02em;
+  }
+  .meta-cell b { display: block; font-weight: 700; }
+
+  /* ── Logo mark, plain black line art ─────────────────── */
+  .logo { width: 20mm; height: auto; }
+
+  /* ── Project title, small masthead above the headline ─── */
+  .project-title {
+    margin: 20mm 0 0;
+    font-size: 4mm;
+    font-weight: 800;
+    letter-spacing: 0.3em;
   }
 
-  /* ── Steps ──────────────────────────────────────────── */
-  .steps {
+  /* ── Huge Swiss headline, flush left ─────────────────── */
+  .cover-title {
+    margin: 5mm 0 0;
+    font-size: 34mm;
+    font-weight: 800;
+    line-height: 0.94;
+    letter-spacing: -0.03em;
+  }
+
+  .spacer { flex: 1; }
+
+  /* ── Bottom split: intro text left, list right ───────── */
+  .bottom-split {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8mm;
-    flex: 1;
+    gap: 14mm;
+    align-items: end;
   }
-  .step {
-    background: rgba(255,255,255,0.05);
-    border: 0.3mm solid rgba(255,255,255,0.12);
-    border-radius: 5mm;
-    padding: 7mm;
+  .intro-text {
+    font-size: 5mm;
+    font-weight: 700;
+    line-height: 1.35;
+    max-width: 78mm;
+  }
+  .steps-col { display: flex; }
+  .steps-label {
+    font-size: 2.6mm;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    width: 22mm;
+    flex-shrink: 0;
+  }
+  .steps-list { flex: 1; }
+  .step-row {
     display: flex;
-    flex-direction: column;
-    gap: 3mm;
+    gap: 4mm;
+    padding: 3mm 0;
+    border-top: 0.25mm solid #ccc;
+    align-items: flex-start;
   }
-  .step-num {
-    font-size: 3.2mm;
-    font-weight: 800;
-    letter-spacing: 0.4mm;
-    color: rgb(105, 175, 250);
+  .step-icon {
+    width: 7mm;
+    height: 7mm;
+    flex-shrink: 0;
+    margin-top: 0.6mm;
+    stroke: #0a0a0a;
+    stroke-width: 1.6;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
-  .step-icon { width: 9mm; height: 9mm; stroke: #fff; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-  .step-title { font-size: 5mm; font-weight: 800; margin: 0; }
-  .step-desc { font-size: 3.6mm; font-weight: 500; line-height: 1.5; color: rgba(255,255,255,0.68); margin: 0; }
+  .step-row:first-child { border-top: none; }
+  .step-row-num { font-size: 2.6mm; font-weight: 700; width: 6mm; flex-shrink: 0; }
+  .step-row-title { font-size: 3.4mm; font-weight: 700; margin: 0 0 0.6mm; }
+  .step-row-desc { font-size: 2.9mm; font-weight: 500; line-height: 1.4; color: #333; margin: 0; }
 
-  /* ── Footer ─────────────────────────────────────────── */
-  .footer {
-    margin-top: 10mm;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 6mm;
-    border-top: 0.3mm solid rgba(255,255,255,0.14);
+  /* ── Page 2: About ────────────────────────────────────── */
+  .about-title {
+    margin: 16mm 0 0;
+    font-size: 20mm;
+    font-weight: 800;
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    max-width: 165mm;
   }
-  .footer-text { font-size: 3.4mm; font-weight: 600; color: rgba(255,255,255,0.55); }
-  .footer-place { font-size: 3.4mm; font-weight: 800; color: #fff; letter-spacing: 0.3mm; }
+  .about-body {
+    display: grid;
+    grid-template-columns: 22mm 1fr;
+    gap: 14mm;
+    margin-top: 14mm;
+  }
+  .about-label {
+    font-size: 2.6mm;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .about-copy { max-width: 128mm; }
+  .about-copy p {
+    font-size: 3.7mm;
+    font-weight: 500;
+    line-height: 1.62;
+    color: #1a1a1a;
+    margin: 0 0 5mm;
+  }
+  .pull-quote {
+    font-size: 8mm;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 8mm 0 8mm;
+    max-width: 128mm;
+  }
+
 </style>
 </head>
 <body>
+
+  <!-- ── PAGE 1 — COVER ─────────────────────────────────── -->
   <div class="page">
 
-    <div class="header">
-      <svg class="logo" viewBox="0 0 200 108" role="img" aria-label="Memo-Haus">
-        <g transform="translate(100,32)">
-          <ellipse rx="26" ry="11" fill="none" stroke="rgb(105,175,250)" stroke-width="2.2" transform="rotate(-18)"/>
-          <circle r="18" fill="none" stroke="rgb(105,175,250)" stroke-width="2.2"/>
-          <line x1="-18" y1="0" x2="-24" y2="0" stroke="rgb(105,175,250)" stroke-width="2.4"/>
-          <line x1="18" y1="0" x2="24" y2="0" stroke="rgb(105,175,250)" stroke-width="2.4"/>
-          <circle r="4" fill="rgb(105,175,250)"/>
-          <circle r="1.6" cx="-0.8" cy="-0.8" fill="#fff"/>
-        </g>
-      </svg>
-      <div>
-        <p class="brand-title">MEMO&nbsp;HAUS</p>
-        <p class="brand-tag">FROM ARCHIVE TO PARTICIPATORY EXPERIENCE</p>
+    <div class="meta-row">
+      <div class="meta-cell">
+        <b>Memo Haus</b>
+        Participatory Archive
+      </div>
+      <div class="meta-cell">
+        <b>Wolfsburg</b>
+        Prompt City, 2026
+      </div>
+      <div class="meta-cell" style="text-align:right;">
+        <svg class="logo" viewBox="0 0 200 108" role="img" aria-label="Memo-Haus">
+          <g transform="translate(100,52)">
+            <ellipse rx="26" ry="11" fill="none" stroke="#0a0a0a" stroke-width="3" transform="rotate(-18)"/>
+            <circle r="18" fill="none" stroke="#0a0a0a" stroke-width="3"/>
+            <line x1="-18" y1="0" x2="-24" y2="0" stroke="#0a0a0a" stroke-width="3.4"/>
+            <line x1="18" y1="0" x2="24" y2="0" stroke="#0a0a0a" stroke-width="3.4"/>
+            <circle r="5" fill="#0a0a0a"/>
+          </g>
+        </svg>
       </div>
     </div>
 
-    <h1 class="headline">Your memory belongs here too.</h1>
-    <p class="sub">
-      A shared, growing archive of Wolfsburg, built from the photos, voices, and stories of the
-      people who actually live here. Scan the code, add yours, and step inside everyone else's.
-    </p>
+    <p class="project-title">MEMO&nbsp;HAUS</p>
+    <h1 class="cover-title">Your<br />Memory<br />Belongs<br />Here.</h1>
 
-    <div class="steps">
+    <div class="spacer"></div>
 
-      <div class="step">
-        <span class="step-num">01</span>
-        <svg class="step-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="2.5" height="2.5" fill="#fff" stroke="none"/><rect x="18.5" y="15" width="2.5" height="2.5" fill="#fff" stroke="none"/><rect x="15" y="18.5" width="2.5" height="2.5" fill="#fff" stroke="none"/><rect x="18.5" y="18.5" width="2.5" height="2.5" fill="#fff" stroke="none"/></svg>
-        <p class="step-title">Scan the code</p>
-        <p class="step-desc">Point your phone at the QR code on the pavilion. No app to install, it opens straight in your browser.</p>
+    <div class="bottom-split">
+      <p class="intro-text">A shared, growing archive of Wolfsburg, built from the photos, voices, and stories of the people who actually live here.</p>
+
+      <div class="steps-col">
+        <div class="steps-label">How It<br />Works</div>
+        <div class="steps-list">
+          <div class="step-row">
+            <svg class="step-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="2.5" height="2.5" fill="#0a0a0a" stroke="none"/><rect x="18.5" y="15" width="2.5" height="2.5" fill="#0a0a0a" stroke="none"/><rect x="15" y="18.5" width="2.5" height="2.5" fill="#0a0a0a" stroke="none"/><rect x="18.5" y="18.5" width="2.5" height="2.5" fill="#0a0a0a" stroke="none"/></svg>
+            <span class="step-row-num">01</span>
+            <div>
+              <p class="step-row-title">Scan the code</p>
+              <p class="step-row-desc">Point your phone at the QR code on the pavilion. No app to install.</p>
+            </div>
+          </div>
+          <div class="step-row">
+            <svg class="step-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M3 15l5-5 4 4 4-4 5 5"/><rect x="10.5" y="19" width="3" height="3" rx="1"/></svg>
+            <span class="step-row-num">02</span>
+            <div>
+              <p class="step-row-title">Add your memory</p>
+              <p class="step-row-desc">In the Preserve tab: a photo old or new, its year, a story, and a voice note or clip of music if you like.</p>
+            </div>
+          </div>
+          <div class="step-row">
+            <svg class="step-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.3" fill="#0a0a0a" stroke="none"/><circle cx="7" cy="8" r="1" fill="#0a0a0a" stroke="none"/><circle cx="17" cy="8" r="1" fill="#0a0a0a" stroke="none"/><circle cx="7" cy="16" r="1" fill="#0a0a0a" stroke="none"/><circle cx="17" cy="16" r="1" fill="#0a0a0a" stroke="none"/><circle cx="12" cy="4" r="1" fill="#0a0a0a" stroke="none"/><circle cx="12" cy="20" r="1" fill="#0a0a0a" stroke="none"/><circle cx="4" cy="12" r="1" fill="#0a0a0a" stroke="none"/><circle cx="20" cy="12" r="1" fill="#0a0a0a" stroke="none"/></svg>
+            <span class="step-row-num">03</span>
+            <div>
+              <p class="step-row-title">It appears in Explore</p>
+              <p class="step-row-desc">Rebuilt into a 3D scene, it joins everyone else's in the Explore tab.</p>
+            </div>
+          </div>
+          <div class="step-row">
+            <svg class="step-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="#0a0a0a" stroke="none"/></svg>
+            <span class="step-row-num">04</span>
+            <div>
+              <p class="step-row-title">Select and explore</p>
+              <p class="step-row-desc">Move through the shared map, or drag the time slider to jump to a decade. Select a memory, or linger near one, and it opens itself.</p>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <div class="step">
-        <span class="step-num">02</span>
-        <svg class="step-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M3 15l5-5 4 4 4-4 5 5"/><rect x="10.5" y="19" width="3" height="3" rx="1"/></svg>
-        <p class="step-title">Share a memory</p>
-        <p class="step-desc">Upload a photo, place it on the map, and write what you remember. Add a voice note or a clip of music if you like.</p>
-      </div>
-
-      <div class="step">
-        <span class="step-num">03</span>
-        <svg class="step-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.3" fill="#fff" stroke="none"/><circle cx="7" cy="8" r="1" fill="#fff" stroke="none"/><circle cx="17" cy="8" r="1" fill="#fff" stroke="none"/><circle cx="7" cy="16" r="1" fill="#fff" stroke="none"/><circle cx="17" cy="16" r="1" fill="#fff" stroke="none"/><circle cx="12" cy="4" r="1" fill="#fff" stroke="none"/><circle cx="12" cy="20" r="1" fill="#fff" stroke="none"/><circle cx="4" cy="12" r="1" fill="#fff" stroke="none"/><circle cx="20" cy="12" r="1" fill="#fff" stroke="none"/></svg>
-        <p class="step-title">Watch it come to life</p>
-        <p class="step-desc">Your photo is rebuilt into a 3D scene of drifting particles and joins the shared field on the pavilion's display.</p>
-      </div>
-
-      <div class="step">
-        <span class="step-num">04</span>
-        <svg class="step-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="#fff" stroke="none"/></svg>
-        <p class="step-title">Explore everyone's</p>
-        <p class="step-desc">Move through the shared map with your phone as a remote. Linger near a memory and it opens itself, story, sound and all.</p>
-      </div>
-
-    </div>
-
-    <div class="footer">
-      <span class="footer-text">A participatory memory archive, built with the people of</span>
-      <span class="footer-place">Wolfsburg</span>
     </div>
 
   </div>
+
+  <!-- ── PAGE 2 — ABOUT / THE PROJECT'S SOUL ──────────────── -->
+  <div class="page">
+
+    <div class="meta-row">
+      <div class="meta-cell">
+        <b>Memo Haus</b>
+        About the Project
+      </div>
+      <div class="meta-cell">
+        <b>From Archive</b>
+        To Participatory Experience
+      </div>
+      <div class="meta-cell">
+        <b>A Pavilion</b>
+        At the Junction, ZOB
+      </div>
+    </div>
+
+    <h1 class="about-title">One industrial image. Many lived ones.</h1>
+
+    <div class="about-body">
+      <span class="about-label">About</span>
+      <div class="about-copy">
+        <p>Memo-Haus is a living memory archive, held inside a small pavilion at the edge of the city, as a field of moments in light and sound. A photograph becomes a place you can walk into. A voice becomes something you can stand close to and listen to again.</p>
+
+        <p class="pull-quote">Every memory here is real, and every one of them is equally home.</p>
+
+        <p>Anyone can add one: a photo old or new, its year, a story, a voice note or a piece of music if they like. It becomes a three-dimensional scene and takes its place beside everyone else's, on a shared map that keeps growing at the pavilion by the ZOB junction.</p>
+
+        <p>Walk through it with your own phone as the guide, or drag the time slider to travel straight to a decade. Come close to a memory and it opens, its story and its sound rising to meet you; step back and it settles into quiet again, one more presence in the field.</p>
+
+        <p>It isn't a monument, and it isn't an archive in the usual sense. It's closer to a chorus: hundreds of small, ordinary moments, each one kept exactly as it was given.</p>
+
+        <p>Wolfsburg is known worldwide for its industry. Memo-Haus adds a second identity to that, made entirely from the people who call it home.</p>
+      </div>
+    </div>
+
+  </div>
+
 </body>
 </html>
