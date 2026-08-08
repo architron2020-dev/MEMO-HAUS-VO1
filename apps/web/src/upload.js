@@ -228,7 +228,11 @@ async function restoreDraft() {
   }
 }
 
-restoreDraft();
+// Draft restore disabled — the form should always open blank instead of
+// showing whatever was left over from a previous visit. Auto-save still
+// runs (scheduleDraftSave above) so re-enabling this call is all it'd take
+// to bring restoration back.
+clearDraft();
 
 function escapeHtml(str) {
   const div = document.createElement("div");
